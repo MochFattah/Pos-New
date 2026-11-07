@@ -46,7 +46,7 @@ final class Router
 
     public function dispatch(Request $request): Response
     {
-        $path = self::normalize($request->path());
+        $path = self::normalize($request->rawPath());
         $allowed = [];
 
         foreach ($this->routes as $route) {

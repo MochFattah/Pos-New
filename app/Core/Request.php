@@ -78,7 +78,7 @@ final class Request
     private static function pathOf(string $uri): string
     {
         $path = parse_url($uri, PHP_URL_PATH);
-        return is_string($path) && $path !== '' ? rawurldecode($path) : '/';
+        return is_string($path) && $path !== '' ? $path : '/';
     }
 
     public function method(): string
@@ -86,9 +86,20 @@ final class Request
         return $this->method;
     }
 
-    public function path(): string
+    /**
+     * Path mentah (masih ter-encode, tanpa query string) untuk pencocokan rute.
+     */
+    public function rawPath(): string
     {
         return $this->path;
+    }
+
+    /**
+     * Path yang sudah di-decode, hanya untuk kemudahan baca/log; jangan dipakai mencocokkan rute.
+     */
+    public function path(): string
+    {
+        return rawurldecode($this->path);
     }
 
     public function input(string $key, mixed $default = null): mixed

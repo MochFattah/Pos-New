@@ -45,6 +45,24 @@ final class RouterTest extends TestCase
         $this->assertSame('cabang 7', $res->body());
     }
 
+    public function testParamsAreDecodedExactlyOnce(): void
+    {
+        $router = new Router();
+        $router->get('/x/{v}', fn (Request $r): Response => Response::html((string) $r->attribute('v')));
+        $this->assertSame('%41', $router->dispatch(Request::create('GET', '/x/%2541'))->body());
+        $this->assertSame('100%', $router->dispatch(Request::create('GET', '/x/100%25'))->body());
+        $this->assertSame('abc-1', $router->dispatch(Request::create('GET', '/x/abc-1'))->body());
+    }
+
+    public function testEncodedSlashDoesNotChangeSegmentBoundaries(): void
+    {
+        $router = new Router();
+        $router->get('/x/{v}', fn (Request $r): Response => Response::html((string) $r->attribute('v')));
+        $router->get('/y/{a}/{b}', fn (): Response => Response::html('dua'));
+        $this->assertSame('a/b', $router->dispatch(Request::create('GET', '/x/a%2Fb'))->body());
+        $this->assertThrows(NotFoundException::class, fn () => $router->dispatch(Request::create('GET', '/y/a%2Fb')));
+    }
+
     public function testUnknownPathThrowsNotFound(): void
     {
         $router = new Router();
