@@ -1,1 +1,5 @@
+.env
+storage/*
+!storage/.gitkeep
+node_modules/
 .superpowers/

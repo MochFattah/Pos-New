@@ -1,0 +1,8 @@
+{
+    "name": "pos-retail",
+    "private": true,
+    "description": "Aset front-end POS Retail",
+    "devDependencies": {
+        "tailwindcss": "^4.3.0"
+    }
+}
