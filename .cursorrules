@@ -1,0 +1,642 @@
+# CURSOR RULES — POS RETAIL WEB APPLICATION
+
+Dokumen ini adalah aturan teknis dan arsitektur proyek. Gunakan bersama:
+- `PRD_POS_Retail_Web_Application_v1.3.md` sebagai sumber kebenaran kebutuhan produk.
+- `DESAIN.md` sebagai sumber kebenaran visual dan interaksi.
+
+## 1. Prinsip Utama dan Prioritas Dokumen
+
+1. PRD menentukan ruang lingkup, aturan bisnis, role, alur transaksi, integrasi, dan batasan produk.
+2. DESAIN.md menentukan arah visual, komponen, state UI, responsivitas, tema, dan aksesibilitas.
+3. Dokumen ini menentukan cara teknis mengimplementasikan kedua dokumen tersebut.
+4. Jangan menambahkan, mengurangi, atau mengubah fitur maupun aturan bisnis tanpa persetujuan.
+5. Jika PRD dan DESAIN.md tampak bertentangan, jangan memilih diam-diam. Laporkan konflik dan minta keputusan.
+6. Hal yang ditandai Open Questions atau belum ditetapkan harus dianggap belum diputuskan. Jangan mengarang harga, kuota paket, metrik dashboard, approval, aturan retur/refund, kebijakan sesi offline, atau perilaku perangkat.
+7. Sebelum mengubah file, pahami struktur dan pola yang sudah ada. Hindari rewrite besar jika perubahan lokal sudah cukup.
+8. Jangan mengklaim fitur selesai sebelum implementasi, pengujian, dan verifikasi terkait dilakukan.
+
+## 2. Rekomendasi Tech Stack
+
+### 2.1 Stack inti — mengikuti keputusan PRD
+
+| Lapisan | Teknologi | Ketentuan |
+|---|---|---|
+| Backend | PHP Native | PHP modular tanpa framework backend penuh |
+| Runtime PHP | PHP 8.3+ direkomendasikan | Verifikasi versi PHP yang tersedia di hosting sebelum menetapkan versi final |
+| Database | MySQL 8.0+ | Gunakan InnoDB, foreign key, transaksi, indeks, dan constraint |
+| Frontend | HTML5, CSS, JavaScript | JavaScript ES Modules; hindari framework SPA tanpa persetujuan |
+| Styling | Tailwind CSS 4.x | Gunakan design tokens dari DESAIN.md; hasil CSS dikompilasi untuk deployment |
+| PWA | Web App Manifest + Service Worker | Offline dibatasi untuk POS |
+| Offline storage | IndexedDB | Simpan cache POS dan antrean transaksi lokal |
+| Dependency PHP | Composer | Autoload PSR-4 dan pengelolaan library |
+| Web server | Apache atau Nginx | Sesuaikan konfigurasi dengan hosting |
+| Payment platform | Midtrans | Hanya untuk invoice/langganan SaaS |
+| Barcode | getUserMedia + BarcodeDetector API + ZXing fallback | Uji browser/perangkat; jangan menganggap dukungan universal |
+| Export | PhpSpreadsheet + Dompdf (atau library setara) | CSV dapat dibuat melalui mekanisme native PHP |
+| Testing PHP | PHPUnit | Unit dan integration test |
+| Static analysis | PHPStan | Terapkan bertahap dan tingkatkan level secara terukur |
+| Formatting PHP | PHP-CS-Fixer | Konfigurasi konsisten dalam repository |
+
+### 2.2 Batasan penggunaan framework dan library
+
+- Jangan mengganti PHP Native menjadi Laravel, Symfony, Node.js, atau backend lain tanpa persetujuan.
+- Jangan memperkenalkan React, Vue, Angular, atau framework SPA sebagai default. UI menggunakan HTML yang dirender server dan JavaScript modular.
+- Alpine.js boleh dipertimbangkan hanya untuk interaksi kecil jika vanilla JavaScript menjadi tidak praktis; jangan mencampur banyak pendekatan state.
+- Tailwind CSS dipilih untuk konsistensi token, responsive utilities, dan pemeliharaan UI. Hindari menulis utility class secara acak tanpa mengikuti token desain.
+- Jangan menggunakan CDN untuk dependency yang harus tersedia ketika POS offline. Vendor asset penting secara lokal dan gunakan versi yang terkunci.
+- Library baru harus memiliki alasan, lisensi yang sesuai, kompatibilitas PHP/browser, dan dampak ukuran/performa yang diperiksa.
+- Jangan mengirim secret, private key, atau konfigurasi server ke frontend.
+
+### 2.3 Arsitektur aplikasi
+
+Gunakan **Modular Monolith** dengan pemisahan domain. Satu aplikasi PHP dan satu database utama, tetapi setiap domain memiliki batas tanggung jawab yang jelas.
+
+Alur request backend:
+
+`HTTP Request → Router → Middleware → Controller → Validator/Policy → Service → Repository → MySQL`
+
+Ketentuan:
+- Controller tipis: menerima request, memanggil validasi dan service, lalu mengembalikan response.
+- Service menangani use case dan aturan bisnis.
+- Repository menangani akses data dan query.
+- Middleware menangani autentikasi, konteks tenant/cabang, dan pemeriksaan umum.
+- Policy/authorization service memeriksa permission untuk resource dan tindakan.
+- Validator memvalidasi input di server.
+- View hanya menangani presentasi; jangan menaruh query SQL atau aturan bisnis di template.
+- Integrasi eksternal ditempatkan di adapter/client tersendiri.
+- Jangan membuat satu file controller, model, atau helper raksasa untuk seluruh aplikasi.
+
+## 3. Struktur Folder Proyek
+
+Gunakan struktur berikut sebagai baseline. Nama dapat disesuaikan dengan kebutuhan implementasi, tetapi batas tanggung jawabnya wajib dipertahankan.
+
+```text
+pos-retail/
+├── app/
+│   ├── Core/
+│   │   ├── Application.php
+│   │   ├── Router.php
+│   │   ├── Request.php
+│   │   ├── Response.php
+│   │   ├── Database/
+│   │   ├── Exceptions/
+│   │   ├── Middleware/
+│   │   ├── Validation/
+│   │   ├── Authorization/
+│   │   └── Support/
+│   ├── Modules/
+│   │   ├── Auth/
+│   │   ├── Tenants/
+│   │   ├── Branches/
+│   │   ├── Users/
+│   │   ├── Roles/
+│   │   ├── Subscriptions/
+│   │   ├── Billing/
+│   │   ├── PlatformPayments/
+│   │   ├── Products/
+│   │   ├── Inventory/
+│   │   ├── POS/
+│   │   ├── CashShifts/
+│   │   ├── Attendance/
+│   │   ├── Customers/
+│   │   ├── Suppliers/
+│   │   ├── Purchases/
+│   │   ├── Transfers/
+│   │   ├── Returns/
+│   │   ├── Finance/
+│   │   ├── Accounting/
+│   │   ├── Reports/
+│   │   ├── Support/
+│   │   ├── Notifications/
+│   │   └── AuditLogs/
+│   └── Shared/
+│       ├── DTO/
+│       ├── Enums/
+│       └── Contracts/
+├── bootstrap/
+│   ├── app.php
+│   └── providers.php
+├── config/
+│   ├── app.php
+│   ├── database.php
+│   ├── security.php
+│   ├── filesystems.php
+│   ├── integrations.php
+│   └── services.php
+├── database/
+│   ├── migrations/
+│   ├── seeders/
+│   ├── factories/
+│   └── schema/
+├── public/
+│   ├── index.php
+│   ├── .htaccess
+│   ├── assets/
+│   │   ├── css/
+│   │   ├── js/
+│   │   ├── images/
+│   │   ├── icons/
+│   │   └── vendor/
+│   ├── manifest.webmanifest
+│   ├── service-worker.js
+│   └── offline/
+├── resources/
+│   ├── views/
+│   │   ├── layouts/
+│   │   ├── components/
+│   │   ├── auth/
+│   │   ├── tenant/
+│   │   ├── pos/
+│   │   └── platform/
+│   ├── css/
+│   │   ├── app.css
+│   │   ├── tokens.css
+│   │   └── components/
+│   └── js/
+│       ├── app.js
+│       ├── core/
+│       ├── components/
+│       ├── modules/
+│       └── pwa/
+├── routes/
+│   ├── web.php
+│   ├── api.php
+│   └── platform.php
+├── storage/
+│   ├── logs/
+│   ├── cache/
+│   ├── exports/
+│   ├── uploads/
+│   └── private/
+├── tests/
+│   ├── Unit/
+│   ├── Integration/
+│   ├── Feature/
+│   └── Support/
+├── docs/
+│   ├── architecture/
+│   ├── database/
+│   ├── deployment/
+│   └── decisions/
+├── scripts/
+├── vendor/
+├── .env.example
+├── .gitignore
+├── composer.json
+├── package.json
+├── phpunit.xml
+├── phpstan.neon
+├── .php-cs-fixer.php
+├── PRD.md
+├── DESAIN.md
+└── .cursorrules
+```
+
+### 3.1 Pola isi setiap modul
+
+Setiap modul di `app/Modules/<ModuleName>/` sebaiknya mengikuti pola berikut sesuai kebutuhan modul:
+
+```text
+ModuleName/
+├── Controllers/
+├── Services/
+├── Repositories/
+├── Models/
+├── DTO/
+├── Validators/
+├── Policies/
+├── Requests/
+├── Responses/
+├── Views/
+└── routes.php
+```
+
+Jangan membuat folder kosong untuk semua modul sejak awal jika belum diperlukan. Tambahkan struktur saat modul mulai dikerjakan. Modul boleh memiliki struktur lebih sederhana selama pemisahan tanggung jawab tetap jelas.
+
+### 3.2 Aturan batas modul
+
+- Modul hanya boleh mengakses data domain lain melalui service/contract yang disepakati, bukan mengubah tabel domain lain secara langsung.
+- Shared berisi komponen lintas domain yang benar-benar umum; jangan menjadikannya tempat menumpuk seluruh business logic.
+- Core hanya berisi infrastruktur aplikasi, bukan aturan bisnis POS, inventori, atau akuntansi.
+- `public/` adalah satu-satunya document root web server.
+- `storage/`, `.env`, `vendor/`, source konfigurasi, dan file privat tidak boleh dapat diakses langsung dari web.
+- File upload harus disimpan di lokasi non-public atau melalui mekanisme akses terkontrol bila berisi data privat.
+
+## 4. Konvensi Penamaan dan Clean Code
+
+### 4.1 PHP
+
+- Namespace dan class: `PascalCase`.
+- Method dan variable: `camelCase`.
+- Constant: `UPPER_SNAKE_CASE`.
+- Nama file class mengikuti nama class, contoh `CreateSaleService.php`.
+- Gunakan PSR-4 autoloading melalui Composer.
+- Satu class utama per file.
+- Gunakan typed properties, parameter types, return types, dan strict typing.
+- Hindari global state dan fungsi global kecuali bootstrap/helper yang benar-benar sederhana.
+
+Contoh pola nama:
+- `SaleController`
+- `CreateSaleService`
+- `SaleRepository`
+- `CreateSaleRequest`
+- `SalePolicy`
+- `$tenantId`, `$branchId`, `$saleItems`
+
+### 4.2 JavaScript
+
+- File: `kebab-case.js`.
+- Variable dan function: `camelCase`.
+- Class: `PascalCase`.
+- Constant: `UPPER_SNAKE_CASE`.
+- Gunakan ES Modules (`import`/`export`).
+- Hindari variabel global dan inline JavaScript di HTML.
+- Pisahkan kode per fitur/domain dan gunakan nama fungsi yang menjelaskan maksud.
+
+Contoh:
+- `pos-cart.js`
+- `offline-sync.js`
+- `barcode-scanner.js`
+- `formatCurrency()`
+- `syncPendingSales()`
+
+### 4.3 CSS dan UI
+
+- Gunakan token desain untuk warna, spacing, radius, typography, dan elevation.
+- Nama class custom menggunakan `kebab-case` dan menjelaskan fungsi.
+- Hindari selector global yang memengaruhi modul lain.
+- Jangan membuat nilai warna/spacing baru secara acak jika token yang tersedia sudah cukup.
+- Komponen visual harus reusable dan memiliki state yang konsisten.
+
+### 4.4 Database
+
+- Nama tabel: `snake_case`, umumnya plural, contoh `sales`, `sale_items`.
+- Nama kolom: `snake_case`, contoh `tenant_id`, `created_at`.
+- Primary key dan foreign key harus konsisten.
+- Gunakan nama relasi yang eksplisit; hindari singkatan yang tidak jelas.
+- Semua tabel domain tenant harus memiliki tenant scope yang tepat.
+- Unique key SKU/barcode/serial harus mempertimbangkan tenant dan aturan domain.
+- Gunakan tipe numerik presisi untuk uang; jangan gunakan floating point untuk nominal uang.
+- Simpan timestamp secara konsisten dan konversi sesuai timezone tenant saat ditampilkan.
+
+## 5. Aturan Database dan Integritas Data
+
+1. Gunakan MySQL InnoDB dan foreign key untuk menjaga integritas relasi.
+2. Setiap perubahan schema dibuat melalui migration yang versioned; jangan mengubah database production secara manual tanpa migration terdokumentasi.
+3. Migration harus dapat ditinjau, memiliki urutan jelas, dan aman untuk deployment.
+4. Gunakan index untuk foreign key, kolom pencarian, filter laporan, dan kombinasi tenant/cabang yang sering digunakan.
+5. Jangan mengambil semua transaksi untuk menghitung dashboard. Gunakan query agregat, pagination, dan indeks.
+6. Transaksi penjualan, pembayaran, perubahan stok, dan jurnal terkait harus diproses secara atomik dalam database transaction.
+7. Gunakan locking/strategi konkurensi yang tepat untuk mencegah stok negatif dan double posting.
+8. Gunakan idempotency key/UUID untuk operasi yang dapat diulang, khususnya sinkronisasi offline, webhook, dan pembayaran.
+9. Invoice harus menyimpan snapshot paket, harga, dan ketentuan ketika dibuat.
+10. Data keuangan dan audit tidak boleh dihapus sembarangan. Terapkan status/soft delete hanya jika sesuai aturan domain.
+11. Jurnal yang sudah diposting tidak boleh diedit atau dihapus langsung. Koreksi melalui mekanisme jurnal pembalik/penyesuaian.
+12. Total debit harus sama dengan total kredit sebelum jurnal dapat diposting.
+13. Transaksi operasional yang diposting harus memiliki referensi sumber untuk audit dan penelusuran.
+14. Gunakan seed data hanya untuk data referensi atau lingkungan pengembangan; jangan menanam data bisnis contoh ke production tanpa persetujuan.
+
+## 6. Multi-Tenant, Multi-Cabang, RBAC, dan Keamanan
+
+### 6.1 Tenant isolation
+
+- Tenant aktif harus ditentukan server dari sesi/token terverifikasi dan keanggotaan pengguna; jangan percaya `tenant_id` dari request browser.
+- Setiap query data tenant wajib memiliki tenant scope.
+- Periksa akses cabang pada setiap operasi yang terikat cabang.
+- Jangan mengandalkan penyembunyian menu sebagai kontrol keamanan.
+- Policy harus memeriksa role, permission, tenant, cabang, dan kepemilikan resource sesuai konteks.
+- Uji eksplisit skenario pengguna tenant A mencoba membaca/mengubah data tenant B.
+- Super Admin memiliki konteks platform yang terpisah dari konteks tenant. Akses lintas tenant harus eksplisit, diaudit, dan dibatasi kebijakan.
+
+### 6.2 Autentikasi dan sesi
+
+- Hash password dengan `password_hash()` dan verifikasi dengan `password_verify()` atau mekanisme PHP yang setara.
+- Jangan menyimpan password plaintext atau reversible encryption.
+- Aktifkan HTTPS, cookie `Secure`, `HttpOnly`, dan `SameSite` yang sesuai.
+- Regenerasi session ID setelah login dan perubahan privilege.
+- Terapkan rate limit login, pembatasan percobaan, expiry sesi, logout, dan reset password yang aman.
+- Jangan membocorkan apakah email terdaftar melalui pesan error yang berlebihan.
+- MFA dapat dipertimbangkan sebagai penguatan, tetapi bukan fitur wajib kecuali disetujui.
+
+### 6.3 Proteksi aplikasi
+
+- Gunakan PDO prepared statements; dilarang menyusun query SQL dengan menggabungkan input pengguna.
+- Terapkan CSRF token pada seluruh request yang mengubah state berbasis session.
+- Escape output sesuai konteks untuk mencegah XSS.
+- Validasi input di server meskipun frontend sudah melakukan validasi.
+- Validasi tipe, ukuran, ekstensi, MIME, dan nama file upload; jangan percaya nama file dari pengguna.
+- Batasi akses file privat melalui controller/policy.
+- Jangan menampilkan stack trace, SQL, secret, atau detail server kepada pengguna.
+- Simpan konfigurasi sensitif dalam environment variables atau secret storage, bukan repository.
+- Enkripsi kredensial integrasi yang disimpan; batasi siapa yang dapat membaca/mengubahnya.
+- Catat aktivitas sensitif dalam audit log tanpa menyimpan password, token, atau secret.
+
+### 6.4 Midtrans
+
+- Midtrans hanya untuk pembayaran langganan platform SaaS.
+- Pembayaran toko di POS dicatat manual sesuai metode yang disediakan tenant; jangan integrasikan Midtrans ke checkout POS.
+- Kredensial Midtrans platform hanya dapat dikelola Super Admin.
+- Server Key tidak boleh dikirim ke browser atau ditampilkan utuh setelah tersimpan.
+- Webhook harus memverifikasi signature/status dari mekanisme resmi dan memproses event secara idempotent.
+- Jangan mengaktifkan langganan hanya berdasarkan redirect browser.
+- Tangani notifikasi berulang, terlambat, dan tidak berurutan dengan aman.
+
+## 7. Aturan Khusus Domain Kritis
+
+### 7.1 POS dan shift
+
+- Kasir wajib memiliki shift aktif sebelum transaksi POS.
+- Jangan izinkan transaksi bila shift belum dibuka.
+- Cegah shift aktif ganda pada register yang sama sesuai aturan PRD.
+- Transaksi harus terhubung ke tenant, cabang, register, kasir, dan shift yang sah.
+- Pembayaran kombinasi harus memvalidasi total alokasi sama dengan total tagihan.
+- Metode pembayaran toko adalah pencatatan manual, bukan Midtrans.
+- Hindari double submit dengan idempotency dan proteksi UI.
+- Pembatalan/retur/koreksi harus mengikuti permission dan audit trail.
+
+### 7.2 Inventori
+
+- Stok negatif dilarang.
+- Semua operasi pengurang stok harus memvalidasi ketersediaan saat posting.
+- Validasi stok dilakukan kembali di server ketika transaksi offline disinkronkan.
+- Perubahan stok harus menghasilkan movement/riwayat yang dapat ditelusuri.
+- Serial/IMEI harus unik sesuai scope yang ditentukan.
+- Batch dan expiry harus tetap terhubung ke pergerakan stok.
+- Jangan memperbarui saldo stok hanya dari browser.
+
+### 7.3 Akuntansi
+
+- Posting jurnal dilakukan melalui service terpusat.
+- Total debit wajib sama dengan total kredit.
+- Cegah jurnal ganda dengan idempotency dan referensi sumber.
+- Jurnal posted bersifat immutable; koreksi melalui reversal/adjustment.
+- Periode yang ditutup tidak menerima posting biasa tanpa otorisasi.
+- Laporan keuangan harus berasal dari data transaksi/jurnal yang benar, bukan angka dummy.
+- Metode costing awal yang direkomendasikan PRD adalah Moving Weighted Average; keputusan final dan prosedur perubahan metode harus mengikuti keputusan teknis/bisnis yang disetujui.
+
+### 7.4 PWA dan POS offline
+
+- Offline hanya untuk POS. Modul lain tetap memerlukan koneksi.
+- Gunakan Web App Manifest dan Service Worker untuk instalasi serta cache aset aplikasi.
+- Gunakan IndexedDB untuk cache data POS yang diizinkan dan antrean transaksi offline.
+- Jangan cache halaman admin, laporan, data keuangan, atau response privat secara luas.
+- Perangkat harus sudah login dan dipersiapkan ketika online sebelum penggunaan offline.
+- Simpan transaksi lokal dengan UUID/idempotency key dan status sinkronisasi yang jelas.
+- Antrean lokal tidak boleh hilang hanya karena request gagal atau halaman ditutup.
+- Saat online kembali, sinkronkan antrean secara terkontrol; tangani retry, duplikasi, konflik, dan kegagalan parsial.
+- Server tetap menjadi sumber kebenaran untuk stok dan otorisasi. Validasi ulang saat sinkronisasi.
+- Konflik harus ditampilkan sebagai konflik/perlu ditinjau, bukan sebagai sukses.
+- Kebijakan masa berlaku sesi/cache offline masih perlu keputusan; jangan mengarang durasi.
+- Asset scanner yang diperlukan harus tersedia lokal untuk skenario offline setelah persiapan perangkat.
+- Jangan menjanjikan semua browser, printer, scanner, atau cash drawer kompatibel tanpa pengujian perangkat nyata.
+
+## 8. Aturan UI/UX Berdasarkan DESAIN.md
+
+### 8.1 Arah visual
+
+- Karakter brand: Friendly & Approachable.
+- Referensi: Linear — minimal, rapi, fokus pada konten dan alur kerja.
+- Gunakan bahasa antarmuka Bahasa Indonesia.
+- Hindari dekorasi berlebihan, animasi mengganggu, dan kepadatan informasi yang tidak perlu.
+- Task first, progressive disclosure, clear feedback, predictable interaction, safe operation, responsive by design.
+
+### 8.2 Design tokens
+
+Gunakan token warna berikut sebagai baseline usulan DESAIN.md dan tetap lakukan pemeriksaan kontras sebelum rilis.
+
+**Light theme**
+- `primary`: `#3659D9`
+- `primary-hover`: `#2948BD`
+- `primary-subtle`: `#EEF2FF`
+- `background`: `#F7F8FA`
+- `surface`: `#FFFFFF`
+- `surface-muted`: `#F1F3F6`
+- `text-primary`: `#182230`
+- `text-secondary`: `#536174`
+- `text-muted`: `#68778A`
+- `border`: `#DCE2EA`
+- `success`: `#16804A`
+- `success-subtle`: `#EAF7EF`
+- `warning`: `#A85B08`
+- `warning-subtle`: `#FFF4E5`
+- `danger`: `#C33737`
+- `danger-subtle`: `#FDECEC`
+- `info`: `#1769AA`
+- `info-subtle`: `#EAF4FC`
+
+**Dark theme**
+- `primary`: `#91A7FF`
+- `primary-hover`: `#B0BEFF`
+- `primary-subtle`: `#26345F`
+- `background`: `#10141C`
+- `surface`: `#191F2A`
+- `surface-muted`: `#222B38`
+- `text-primary`: `#F1F4F9`
+- `text-secondary`: `#C0CAD8`
+- `text-muted`: `#A3B0C2`
+- `border`: `#344052`
+- `success`: `#65D695`
+- `success-subtle`: `#1D3A2B`
+- `warning`: `#FFC078`
+- `warning-subtle`: `#49351F`
+- `danger`: `#FF8585`
+- `danger-subtle`: `#482729`
+- `info`: `#83C5F4`
+- `info-subtle`: `#1D3548`
+
+Aturan:
+- Warna primary untuk aksi utama, tautan penting, dan navigasi aktif; jangan semua tombol menjadi primary.
+- Warna status memiliki makna semantik, bukan dekorasi.
+- Status tidak boleh dibedakan melalui warna saja; selalu sertakan teks dan/atau ikon bermakna.
+- Jangan menggunakan warna di luar token tanpa alasan dan pencatatan.
+- Tema gelap harus memiliki hierarki dan keterbacaan setara tema terang.
+
+### 8.3 Typography, spacing, dan radius
+
+- Font usulan: Inter; fallback `system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`. Pastikan keputusan font final tidak bertentangan dengan brand/licensing.
+- Gunakan sentence case untuk judul, label, dan tombol.
+- Skala acuan: H1 28px desktop/24px mobile; H2 22px/20px; H3 18px; body 14–16px; label 14px; caption 12–14px; angka POS 24–32px.
+- Gunakan angka tabular bila tersedia untuk nominal, kuantitas, dan angka tabel.
+- Spacing basis 4px: 4, 8, 12, 16, 20, 24, 32, 40, 48px.
+- Radius: 6px badge/elemen kecil, 8px input/tombol, 12px card/panel, 16px dialog besar, 999px avatar/chip bila sesuai.
+- Hindari caption kecil untuk informasi penting.
+
+### 8.4 Responsive layout
+
+- Desktop: grid 12 kolom untuk dashboard dan halaman data yang membutuhkan panel.
+- Tablet: sederhanakan kolom tanpa menyembunyikan aksi utama.
+- Smartphone: satu kolom untuk form dan data yang tidak cocok berdampingan.
+- Padding awal konten: desktop 24px, tablet 20px, smartphone 16px.
+- Tabel lebar boleh scroll horizontal atau memakai tampilan ringkas, tetapi data dan tindakan penting tetap dapat diakses.
+- POS harus mengatur ulang layout pada layar kecil tanpa menghilangkan informasi dan aksi wajib.
+- Jangan menetapkan breakpoint baru secara sembarang; dokumentasikan breakpoint design system dan uji pada perangkat nyata.
+
+### 8.5 Komponen dan state
+
+Setiap komponen interaktif harus memikirkan state yang relevan:
+- default
+- hover (jika pointer tersedia)
+- focus-visible
+- active/pressed
+- disabled
+- loading
+- error
+- empty
+- success/valid
+- selected/expanded bila relevan
+
+Aturan:
+- Label form harus selalu terlihat; placeholder bukan pengganti label.
+- Pesan error spesifik dan diletakkan dekat field terkait.
+- Loading mencegah submit berulang.
+- Disabled tetap terbaca dan jelaskan syarat yang belum terpenuhi bila tidak jelas.
+- Tabel memiliki loading, empty, error, selected, dan state aksi yang sesuai.
+- Dialog penting menjelaskan dampak tindakan, menyediakan batal, mengelola fokus, dan mengembalikan fokus saat ditutup.
+- Jangan menambahkan konfirmasi pada setiap tindakan sederhana.
+- Menu/aksi yang tidak diizinkan role tidak ditampilkan sebagai kontrol aktif.
+- Informasi penting tidak boleh hanya muncul ketika hover.
+- Nominal dan angka rata kanan; teks rata kiri.
+
+### 8.6 Aksesibilitas
+
+- Gunakan HTML semantik dan struktur heading yang berurutan.
+- Semua fungsi utama dapat digunakan dengan keyboard.
+- Focus indicator harus jelas dan tidak dihilangkan.
+- Gunakan label yang terhubung secara programatis dengan input.
+- Hubungkan pesan error ke field terkait dan umumkan status penting secara accessible.
+- Jangan mengandalkan warna saja untuk status.
+- Target sentuh harus nyaman digunakan pada perangkat mobile.
+- Sediakan nama accessible untuk tombol ikon dan kontrol nonteks.
+- Hormati preferensi `prefers-reduced-motion`.
+- Uji kontras untuk light dan dark theme.
+- DESAIN.md mengarahkan aksesibilitas tingkat lanjut; WCAG 2.2 AA dapat digunakan sebagai target QA yang direkomendasikan, tetapi statusnya perlu persetujuan formal bila dijadikan kriteria penerimaan produk.
+
+## 9. Penanganan Error, Logging, dan Observability
+
+- Gunakan exception yang spesifik; jangan menelan exception dengan catch kosong.
+- Tangani error pada batas aplikasi dan tampilkan pesan ramah kepada pengguna.
+- Simpan detail teknis di log server, bukan di response publik.
+- Gunakan correlation/request ID untuk membantu penelusuran request.
+- Log minimal: waktu, level, request ID, user/tenant context bila aman, modul, dan ringkasan error.
+- Jangan log password, token, session ID, Server Key, data kartu, atau data sensitif.
+- Bedakan validation error, authorization error, not found, conflict, rate limit, dan server error.
+- Untuk kegagalan jaringan/integrasi, tampilkan status dan tindakan pemulihan yang sesuai.
+- Sediakan retry hanya untuk operasi yang aman diulang atau memiliki idempotency.
+- Audit log untuk perubahan penting: transaksi, stok, shift, jurnal, permission, konfigurasi, demo, langganan, dan aktivitas platform sesuai PRD.
+
+## 10. Performa dan Skalabilitas
+
+- Prioritaskan kecepatan POS, pencarian produk, dan pemindaian barcode.
+- Gunakan pagination untuk daftar dan laporan besar.
+- Hindari N+1 query dan query tanpa batas.
+- Pilih kolom yang dibutuhkan; jangan mengambil seluruh tabel.
+- Gunakan agregasi database untuk ringkasan dashboard.
+- Tambahkan index berdasarkan query nyata dan ukur dampaknya.
+- Cache hanya data yang aman dan memiliki strategi invalidasi jelas.
+- Proses berat dapat dipindahkan ke queue/background job bila infrastruktur mendukung.
+- Optimalkan gambar dan asset frontend; hindari dependency frontend berlebihan.
+- Ukur performa dengan data realistis, termasuk multi-cabang dan volume transaksi yang meningkat.
+
+## 11. Testing dan Definition of Done
+
+### 11.1 Jenis pengujian
+
+- Unit test untuk service, validator, perhitungan, dan aturan bisnis.
+- Integration test untuk repository, database transaction, dan integrasi.
+- Feature test untuk alur login, permission, tenant isolation, POS, shift, stok, jurnal, langganan, dan webhook.
+- Regression test untuk setiap bug yang diperbaiki.
+- Browser/device test untuk desktop, tablet, smartphone, PWA, kamera barcode, dan offline POS.
+- Accessibility check untuk keyboard, focus, label, kontras, dan screen reader dasar.
+- Uji restore backup secara berkala sesuai prosedur operasional.
+
+### 11.2 Skenario wajib berisiko tinggi
+
+- Tenant A tidak dapat membaca atau mengubah data tenant B.
+- User tanpa permission tidak dapat menjalankan aksi meskipun request dibuat manual.
+- Kasir tanpa shift aktif tidak dapat melakukan transaksi.
+- Shift/register tidak dapat masuk ke kondisi ganda yang dilarang.
+- Total pembayaran kombinasi harus sama dengan total tagihan.
+- Stok tidak pernah menjadi negatif akibat transaksi online atau sinkronisasi offline.
+- Retry sinkronisasi tidak membuat transaksi atau jurnal ganda.
+- Total debit dan kredit selalu seimbang sebelum posting.
+- Jurnal posted tidak dapat diubah langsung.
+- Webhook Midtrans palsu/berulang/tidak berurutan tidak mengaktifkan langganan secara keliru.
+- Midtrans tidak muncul sebagai metode pembayaran penjualan toko.
+- Data antrean offline tidak hilang saat koneksi gagal.
+- Akses operasional tenant yang demo/langganannya berakhir diblokir sesuai PRD, sementara data tetap disimpan.
+
+### 11.3 Definition of Done
+
+Pekerjaan dianggap selesai hanya jika:
+1. Sesuai PRD dan DESAIN.md.
+2. Validasi server dan authorization tersedia.
+3. Tenant/cabang scope diterapkan untuk seluruh data terkait.
+4. Loading, empty, error, success, dan disabled state relevan ditangani.
+5. Responsif pada ukuran layar yang ditargetkan.
+6. Tidak ada secret atau data sensitif bocor.
+7. Test terkait lulus dan regression test ditambahkan bila diperlukan.
+8. Tidak menimbulkan error console/server yang diketahui.
+9. Migration dan dokumentasi diperbarui bila ada perubahan schema/konfigurasi.
+10. Perubahan dijelaskan ringkas beserta file yang diubah dan hasil verifikasi.
+
+## 12. Git, Environment, dan Deployment
+
+- Simpan `.env` asli di luar version control; commit hanya `.env.example` tanpa secret.
+- Pisahkan konfigurasi development, testing, staging, dan production.
+- Jangan commit log, cache, upload privat, export sementara, atau credential.
+- Gunakan migration dan prosedur deployment yang terdokumentasi.
+- Backup database sebelum migration berisiko dan siapkan prosedur rollback/restore.
+- Pastikan document root mengarah ke `public/`.
+- Nonaktifkan debug mode dan error display di production.
+- Terapkan HTTPS.
+- Pastikan direktori storage memiliki permission minimum yang dibutuhkan.
+- Vendor dependency harus terkunci melalui Composer lockfile dan lockfile frontend.
+- Uji service worker/PWA setelah deployment agar cache lama tidak menyebabkan aplikasi menggunakan asset atau schema yang tidak kompatibel.
+
+## 13. Open Questions — Jangan Diasumsikan
+
+Detail berikut belum diputuskan sepenuhnya dalam dokumen sumber dan harus dikonfirmasi sebelum implementasi terkait dianggap final:
+
+- Identitas final brand, logo, dan aset platform.
+- Persetujuan palet warna dan font usulan.
+- Preferensi persistensi tema.
+- Landing page dan kebijakan tampilan harga publik.
+- Definisi metrik, periode default, dan urutan dashboard.
+- Prioritas interaksi POS: touch-first, keyboard-first, atau kombinasi.
+- Aturan pemilihan register bila cabang memiliki beberapa register.
+- Kebutuhan kiosk/fullscreen POS.
+- Kolom tabel minimum pada smartphone.
+- Filter dan periode default setiap laporan.
+- Jenis grafik dan pemetaan metrik.
+- Kebijakan approval tutup shift, koreksi kas, pembatalan, retur, penyesuaian stok, dan jurnal.
+- Detail retur/refund versus kredit pelanggan.
+- Masa berlaku sesi/cache offline dan perilaku ketika otorisasi kedaluwarsa.
+- Kombinasi browser, printer thermal, scanner, dan cash drawer yang didukung.
+- Kontrol ukuran teks tambahan.
+- Bahasa tambahan selain Bahasa Indonesia.
+- Penetapan formal WCAG 2.2 AA sebagai kriteria penerimaan.
+- Detail kuota/harga paket, COA, costing final, retensi data, SLA, backup, dan target pemulihan.
+
+Jika suatu implementasi membutuhkan salah satu keputusan di atas, dokumentasikan pertanyaan dan minta keputusan. Jangan membuat keputusan produk secara diam-diam.
+
+## 14. Cara Kerja AI Coding Assistant
+
+Saat diminta mengerjakan tugas:
+
+1. Baca bagian PRD dan DESAIN.md yang relevan sebelum mengubah kode.
+2. Identifikasi modul, alur data, permission, tenant scope, dan dampak database.
+3. Periksa file yang sudah ada dan gunakan pola proyek yang konsisten.
+4. Buat perubahan sekecil mungkin yang menyelesaikan kebutuhan.
+5. Jangan mengubah modul lain, route, schema, atau tampilan yang tidak terkait tanpa alasan.
+6. Jangan mengganti teknologi atau menambah dependency besar tanpa persetujuan.
+7. Jangan membuat data dummy untuk menyamarkan integrasi yang belum berjalan.
+8. Jangan menghapus validasi, authorization, audit log, atau proteksi hanya agar fitur terlihat berjalan.
+9. Jalankan test/lint yang relevan dan laporkan yang belum dapat dijalankan.
+10. Pada akhir pekerjaan, laporkan:
+    - Ringkasan implementasi.
+    - File yang dibuat/diubah.
+    - Migration atau konfigurasi yang diperlukan.
+    - Test yang dijalankan dan hasilnya.
+    - Risiko, batasan, atau keputusan yang masih menunggu.
+
+**Aturan paling penting:** akurasi transaksi, isolasi tenant, keamanan, integritas stok, dan keseimbangan akuntansi lebih penting daripada sekadar membuat UI terlihat selesai.
