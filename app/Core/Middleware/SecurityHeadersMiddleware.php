@@ -6,21 +6,17 @@ namespace App\Core\Middleware;
 
 use App\Core\Request;
 use App\Core\Response;
+use App\Core\Security\SecurityHeaders;
 
 final class SecurityHeadersMiddleware implements MiddlewareInterface
 {
+    /** @param bool $forceHttps HSTS selalu aktif (mis. di balik proxy TLS); header X-Forwarded-Proto tidak dipercaya */
+    public function __construct(private readonly bool $forceHttps = false)
+    {
+    }
+
     public function handle(Request $request, callable $next): Response
     {
-        $response = $next($request)
-            ->withHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
-            ->withHeader('X-Frame-Options', 'DENY')
-            ->withHeader('X-Content-Type-Options', 'nosniff')
-            ->withHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
-            ->withHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
-
-        if ($request->attribute('https') === true) {
-            $response = $response->withHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-        }
-        return $response;
+        return SecurityHeaders::apply($next($request), $this->forceHttps || $request->attribute('https') === true);
     }
 }

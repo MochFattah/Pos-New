@@ -62,6 +62,7 @@ final class Session
     public function regenerate(): void
     {
         $this->storage->regenerateId();
+        $this->forget(Csrf::KEY);
     }
 
     public function destroy(): void

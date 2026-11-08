@@ -34,9 +34,14 @@ final class RateLimiter
 
     public function record(string $email, string $ip, bool $succeeded): void
     {
+        $now = ($this->clock)();
+        $this->db->execute(
+            'DELETE FROM login_attempts WHERE attempted_at < ?',
+            [gmdate('Y-m-d H:i:s', $now - $this->windowSeconds)]
+        );
         $this->db->execute(
             'INSERT INTO login_attempts (identifier_hash, ip, succeeded, attempted_at) VALUES (?, ?, ?, ?)',
-            [self::identifier($email), $ip, $succeeded ? 1 : 0, gmdate('Y-m-d H:i:s', ($this->clock)())]
+            [self::identifier($email), $ip, $succeeded ? 1 : 0, gmdate('Y-m-d H:i:s', $now)]
         );
     }
 

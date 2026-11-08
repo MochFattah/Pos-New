@@ -22,15 +22,18 @@ date_default_timezone_set((string) Config::get('app.timezone', 'Asia/Jakarta'));
  * Perakitan layanan manual. Fitur berikutnya menambah builder layanan miliknya
  * di sini dan mendaftarkannya pada resolver controller.
  */
-$buildSession = static function () use ($basePath): Session {
+$forceSecure = Config::get('security.session.secure', 'auto') === 'true';
+$idleSeconds = (int) Config::get('security.session.idle_seconds', 28800);
+
+$buildSession = static function () use ($basePath, $forceSecure, $idleSeconds): Session {
     $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
-    return new Session(new NativeSessionStorage($basePath . '/storage/sessions', $https));
+    return new Session(new NativeSessionStorage($basePath . '/storage/sessions', $forceSecure, $idleSeconds, $https));
 };
 
 /** @return list<\App\Core\Middleware\MiddlewareInterface> urutan: header keamanan, sesi, CSRF */
 $buildGlobalMiddleware = static fn (): array => [
-    new SecurityHeadersMiddleware(),
-    new SessionMiddleware($buildSession, (int) Config::get('security.session.idle_seconds', 28800)),
+    new SecurityHeadersMiddleware($forceSecure),
+    new SessionMiddleware($buildSession, $idleSeconds),
     new CsrfMiddleware(),
 ];
 
@@ -44,11 +47,12 @@ $buildRouter = static function () use ($basePath, $buildGlobalMiddleware): Route
     return $router;
 };
 
-$buildApplication = static function (Router $router) use ($basePath): Application {
+$buildApplication = static function (Router $router) use ($basePath, $forceSecure): Application {
     return new Application(
         $router,
         $basePath . '/storage/logs/app.log',
-        (bool) Config::get('app.debug', false)
+        (bool) Config::get('app.debug', false),
+        $forceSecure
     );
 };
 

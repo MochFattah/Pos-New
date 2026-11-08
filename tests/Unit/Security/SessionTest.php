@@ -75,4 +75,14 @@ final class SessionTest extends TestCase
         $this->assertFalse(Csrf::isValid($s, 'salah'));
         $this->assertFalse(Csrf::isValid($this->session(), $token));
     }
+
+    public function testRegenerateRotatesCsrfToken(): void
+    {
+        $s = $this->session();
+        $before = Csrf::token($s);
+        $s->regenerate();
+        $after = Csrf::token($s);
+        $this->assertTrue($before !== $after);
+        $this->assertFalse(Csrf::isValid($s, $before));
+    }
 }

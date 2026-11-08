@@ -70,4 +70,18 @@ final class RateLimiterTest extends TestCase
         $this->assertFalse($rl->tooManyAttempts('a@toko.id', '1.1.1.1'));
         $this->assertSame(1, count($db->query('SELECT id FROM login_attempts')));
     }
+
+    public function testRecordPurgesRowsOlderThanWindowOnly(): void
+    {
+        $db = Db::fresh();
+        $rl = $this->limiter($db);
+        $rl->record('old@toko.id', '1.1.1.1', false);
+        $this->now += 500;
+        $rl->record('recent@toko.id', '1.1.1.1', false);
+        $this->now += 500; // old = 1000 s, recent = 500 s
+        $rl->record('new@toko.id', '1.1.1.1', true);
+        $this->assertSame(2, count($db->query('SELECT id FROM login_attempts')));
+        $this->assertSame(0, count($db->query('SELECT id FROM login_attempts WHERE identifier_hash = ?', [hash('sha256', 'old@toko.id')])));
+        $this->assertSame(1, count($db->query('SELECT id FROM login_attempts WHERE identifier_hash = ?', [hash('sha256', 'recent@toko.id')])));
+    }
 }

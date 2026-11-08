@@ -8,6 +8,7 @@ use App\Core\Exceptions\ForbiddenException;
 use App\Core\Exceptions\HttpException;
 use App\Core\Exceptions\NotFoundException;
 use App\Core\Exceptions\ValidationException;
+use App\Core\Security\SecurityHeaders;
 use Throwable;
 
 final class Application
@@ -16,10 +17,19 @@ final class Application
         private Router $router,
         private string $logFile,
         private bool $debug = false,
+        private bool $forceHttps = false,
     ) {
     }
 
     public function handle(Request $request): Response
+    {
+        return SecurityHeaders::apply(
+            $this->dispatch($request),
+            $this->forceHttps || $request->attribute('https') === true
+        );
+    }
+
+    private function dispatch(Request $request): Response
     {
         try {
             return $this->router->dispatch($request);

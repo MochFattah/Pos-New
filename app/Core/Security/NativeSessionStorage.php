@@ -6,13 +6,34 @@ namespace App\Core\Security;
 
 use RuntimeException;
 
-final class NativeSessionStorage implements SessionStorageInterface
+class NativeSessionStorage implements SessionStorageInterface
 {
+    private const GC_MARGIN = 3600;
+
+    /**
+     * @param bool $forceSecure cookie selalu Secure (config security.session.secure = true)
+     * @param bool $requestHttps request ini sendiri HTTPS ($_SERVER['HTTPS']); X-Forwarded-Proto tidak dipercaya
+     */
     public function __construct(
         private readonly string $savePath,
-        private readonly bool $secure = true,
+        private readonly bool $forceSecure,
+        private readonly int $idleSeconds,
+        private readonly bool $requestHttps,
         private readonly string $name = 'pos_session',
     ) {
+    }
+
+    /** @return array<string, int|string> */
+    public function options(): array
+    {
+        return [
+            'use_strict_mode' => 1,
+            'use_only_cookies' => 1,
+            'cookie_httponly' => 1,
+            'cookie_samesite' => 'Lax',
+            'cookie_secure' => $this->isSecure() ? 1 : 0,
+            'gc_maxlifetime' => $this->idleSeconds + self::GC_MARGIN,
+        ];
     }
 
     public function start(): void
@@ -25,14 +46,7 @@ final class NativeSessionStorage implements SessionStorageInterface
         }
         session_name($this->name);
         session_save_path($this->savePath);
-        $started = session_start([
-            'use_strict_mode' => 1,
-            'use_only_cookies' => 1,
-            'cookie_httponly' => 1,
-            'cookie_samesite' => 'Lax',
-            'cookie_secure' => $this->secure ? 1 : 0,
-        ]);
-        if (!$started) {
+        if (!session_start($this->options())) {
             throw new RuntimeException('Sesi tidak dapat dimulai.');
         }
     }
@@ -54,7 +68,9 @@ final class NativeSessionStorage implements SessionStorageInterface
 
     public function regenerateId(): void
     {
-        session_regenerate_id(true);
+        if (!$this->nativeRegenerate()) {
+            throw new RuntimeException('ID sesi gagal diperbarui.');
+        }
     }
 
     public function destroy(): void
@@ -63,5 +79,30 @@ final class NativeSessionStorage implements SessionStorageInterface
             $_SESSION = [];
             session_destroy();
         }
+        $this->expireCookie();
+    }
+
+    protected function nativeRegenerate(): bool
+    {
+        return session_regenerate_id(true);
+    }
+
+    protected function expireCookie(): void
+    {
+        if (headers_sent()) {
+            return;
+        }
+        setcookie($this->name, '', [
+            'expires' => time() - 3600,
+            'path' => '/',
+            'secure' => $this->isSecure(),
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+    }
+
+    private function isSecure(): bool
+    {
+        return $this->forceSecure || $this->requestHttps;
     }
 }

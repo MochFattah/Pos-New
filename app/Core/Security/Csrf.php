@@ -6,7 +6,7 @@ namespace App\Core\Security;
 
 final class Csrf
 {
-    private const KEY = '_csrf_token';
+    public const KEY = '_csrf_token';
 
     public static function token(Session $session): string
     {
