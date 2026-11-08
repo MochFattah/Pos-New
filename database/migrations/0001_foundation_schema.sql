@@ -58,6 +58,7 @@ CREATE TABLE branches (
   updated_at DATETIME NOT NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_branches_tenant_code (tenant_id, code),
+  UNIQUE KEY uq_branches_tenant_id (tenant_id, id),
   CONSTRAINT fk_branches_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -76,7 +77,7 @@ CREATE TABLE users (
   updated_at DATETIME NOT NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_users_email (email),
-  KEY idx_users_tenant (tenant_id),
+  UNIQUE KEY uq_users_tenant_id (tenant_id, id),
   CONSTRAINT fk_users_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -88,6 +89,7 @@ CREATE TABLE roles (
   is_system TINYINT(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (id),
   UNIQUE KEY uq_roles_tenant_slug (tenant_id, slug),
+  UNIQUE KEY uq_roles_tenant_id (tenant_id, id),
   CONSTRAINT fk_roles_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -106,10 +108,9 @@ CREATE TABLE role_permissions (
   tenant_id BIGINT UNSIGNED NOT NULL,
   PRIMARY KEY (role_id, permission_id),
   KEY idx_role_permissions_permission (permission_id),
-  KEY idx_role_permissions_tenant (tenant_id),
-  CONSTRAINT fk_role_permissions_role FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE CASCADE,
-  CONSTRAINT fk_role_permissions_permission FOREIGN KEY (permission_id) REFERENCES permissions (id),
-  CONSTRAINT fk_role_permissions_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id)
+  KEY idx_role_permissions_tenant_role (tenant_id, role_id),
+  CONSTRAINT fk_role_permissions_role FOREIGN KEY (tenant_id, role_id) REFERENCES roles (tenant_id, id) ON DELETE CASCADE,
+  CONSTRAINT fk_role_permissions_permission FOREIGN KEY (permission_id) REFERENCES permissions (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE user_roles (
@@ -117,11 +118,10 @@ CREATE TABLE user_roles (
   role_id BIGINT UNSIGNED NOT NULL,
   tenant_id BIGINT UNSIGNED NOT NULL,
   PRIMARY KEY (user_id, role_id),
-  KEY idx_user_roles_role (role_id),
-  KEY idx_user_roles_tenant (tenant_id),
-  CONSTRAINT fk_user_roles_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-  CONSTRAINT fk_user_roles_role FOREIGN KEY (role_id) REFERENCES roles (id),
-  CONSTRAINT fk_user_roles_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id)
+  KEY idx_user_roles_tenant_user (tenant_id, user_id),
+  KEY idx_user_roles_tenant_role (tenant_id, role_id),
+  CONSTRAINT fk_user_roles_user FOREIGN KEY (tenant_id, user_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE,
+  CONSTRAINT fk_user_roles_role FOREIGN KEY (tenant_id, role_id) REFERENCES roles (tenant_id, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE user_branch_access (
@@ -129,11 +129,10 @@ CREATE TABLE user_branch_access (
   branch_id BIGINT UNSIGNED NOT NULL,
   tenant_id BIGINT UNSIGNED NOT NULL,
   PRIMARY KEY (user_id, branch_id),
-  KEY idx_user_branch_access_branch (branch_id),
-  KEY idx_user_branch_access_tenant (tenant_id),
-  CONSTRAINT fk_user_branch_access_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-  CONSTRAINT fk_user_branch_access_branch FOREIGN KEY (branch_id) REFERENCES branches (id),
-  CONSTRAINT fk_user_branch_access_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id)
+  KEY idx_user_branch_access_tenant_user (tenant_id, user_id),
+  KEY idx_user_branch_access_tenant_branch (tenant_id, branch_id),
+  CONSTRAINT fk_user_branch_access_user FOREIGN KEY (tenant_id, user_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE,
+  CONSTRAINT fk_user_branch_access_branch FOREIGN KEY (tenant_id, branch_id) REFERENCES branches (tenant_id, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE demo_settings (

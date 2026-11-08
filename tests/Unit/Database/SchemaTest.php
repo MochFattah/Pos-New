@@ -52,48 +52,99 @@ final class SchemaTest extends TestCase
     public function testEveryTenantTableHasTenantId(): void
     {
         foreach ($this->mysql() as $table => $def) {
+            $has = array_key_exists('tenant_id', $def['columns']);
             if (in_array($table, self::NON_TENANT, true)) {
+                $this->assertFalse($has, "$table seharusnya tanpa tenant_id");
                 continue;
             }
-            $this->assertTrue(in_array('tenant_id', $def['columns'], true), "$table tanpa tenant_id");
+            $this->assertTrue($has, "$table tanpa tenant_id");
+            $this->assertSame($table !== 'audit_logs', $def['columns']['tenant_id'], "NOT NULL tenant_id pada $table");
         }
-        $this->assertTrue(count($this->mysql()) > 0);
     }
 
     public function testEveryForeignKeyColumnIsIndexed(): void
     {
         $checked = 0;
         foreach ($this->mysql() as $table => $def) {
-            foreach ($def['fks'] as $fkCols) {
+            foreach ($def['fks'] as $fk) {
                 $checked++;
+                $n = count($fk['cols']);
                 $ok = false;
                 foreach ($def['indexes'] as $idx) {
-                    if (array_slice($idx, 0, count($fkCols)) === $fkCols) {
+                    if (array_slice($idx, 0, $n) === $fk['cols']) {
                         $ok = true;
                     }
                 }
-                $this->assertTrue($ok, "$table(" . implode(',', $fkCols) . ') tanpa indeks');
+                $this->assertTrue($ok, "$table(" . implode(',', $fk['cols']) . ') tanpa indeks berawalan kolom FK');
             }
         }
         $this->assertTrue($checked >= 15, "terlalu sedikit FK: $checked");
     }
 
-    public function testSqliteSchemaColumnsMatchMysqlMigration(): void
+    public function testForeignKeysReferenceUniqueKeys(): void
     {
-        $sqlite = SqlSchemaParser::parse((string) file_get_contents($this->root() . '/tests/Support/schema.sqlite.sql'));
+        $all = $this->mysql();
+        foreach ($all as $table => $def) {
+            foreach ($def['fks'] as $fk) {
+                $ref = $all[$fk['ref_table']];
+                $ok = $ref['primary'] === $fk['ref_cols'] || in_array($fk['ref_cols'], $ref['uniques'], true);
+                $this->assertTrue($ok, "FK $table(" . implode(',', $fk['cols']) . ") merujuk kolom non-unik di {$fk['ref_table']}");
+            }
+        }
+    }
+
+    public function testJunctionTablesUseCompositeTenantForeignKeys(): void
+    {
+        $t = $this->mysql();
+        $has = static function (string $table, array $cols, string $ref, array $refCols) use ($t): bool {
+            foreach ($t[$table]['fks'] as $fk) {
+                if ($fk['cols'] === $cols && $fk['ref_table'] === $ref && $fk['ref_cols'] === $refCols) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        $this->assertTrue($has('user_roles', ['tenant_id', 'user_id'], 'users', ['tenant_id', 'id']));
+        $this->assertTrue($has('user_roles', ['tenant_id', 'role_id'], 'roles', ['tenant_id', 'id']));
+        $this->assertTrue($has('user_branch_access', ['tenant_id', 'user_id'], 'users', ['tenant_id', 'id']));
+        $this->assertTrue($has('user_branch_access', ['tenant_id', 'branch_id'], 'branches', ['tenant_id', 'id']));
+        $this->assertTrue($has('role_permissions', ['tenant_id', 'role_id'], 'roles', ['tenant_id', 'id']));
+        $this->assertTrue($has('role_permissions', ['permission_id'], 'permissions', ['id']));
+    }
+
+    private function sqliteSql(): string
+    {
+        return (string) file_get_contents($this->root() . '/tests/Support/schema.sqlite.sql');
+    }
+
+    public function testSqliteSchemaMatchesMysqlMigration(): void
+    {
+        $drift = SqlSchemaParser::drift($this->mysql(), SqlSchemaParser::parse($this->sqliteSql()));
+        $this->assertSame([], $drift);
+    }
+
+    /** @return list<array{string, string, string}> [deskripsi, cari, ganti] */
+    private static function mutations(): array
+    {
+        return [
+            ['unique', "  CONSTRAINT uq_users_email UNIQUE (email),\n", ''],
+            ['foreign key', 'REFERENCES platform_users (id)', 'REFERENCES users (id)'],
+            ['foreign key (kolom komposit)', 'FOREIGN KEY (tenant_id, role_id) REFERENCES roles (tenant_id, id)', 'FOREIGN KEY (role_id) REFERENCES roles (id)'],
+            ['on delete', 'REFERENCES users (tenant_id, id) ON DELETE CASCADE', 'REFERENCES users (tenant_id, id)'],
+            ['NOT NULL', 'reason TEXT NULL', 'reason TEXT NOT NULL'],
+            ['enum', "CHECK (source IN ('registration','grant','extension'))", "CHECK (source IN ('registration','grant'))"],
+        ];
+    }
+
+    public function testDriftGuardDetectsMutatedSqliteSchema(): void
+    {
+        $sql = $this->sqliteSql();
         $mysql = $this->mysql();
-        $a = array_keys($mysql);
-        $b = array_keys($sqlite);
-        sort($a);
-        sort($b);
-        $this->assertSame($a, $b, 'himpunan tabel berbeda');
-        foreach ($mysql as $table => $def) {
-            $x = $def['columns'];
-            $y = $sqlite[$table]['columns'];
-            sort($x);
-            sort($y);
-            $this->assertSame($x, $y, "kolom $table berbeda");
-            $this->assertSame(count($def['fks']), count($sqlite[$table]['fks']), "jumlah FK $table berbeda");
+        foreach (self::mutations() as [$label, $find, $replace]) {
+            $this->assertTrue(substr_count($sql, $find) >= 1, "mutasi '$label' tidak menemukan teks");
+            $mutated = substr_replace($sql, $replace, (int) strpos($sql, $find), strlen($find));
+            $drift = SqlSchemaParser::drift($mysql, SqlSchemaParser::parse($mutated));
+            $this->assertTrue(count($drift) >= 1, "drift '$label' tidak terdeteksi");
         }
     }
 
@@ -171,5 +222,56 @@ final class SchemaTest extends TestCase
         $this->assertThrows(PDOException::class, fn () => $db->execute(
             "INSERT INTO branches (tenant_id, code, name, is_main, status, created_at, updated_at) VALUES (999, 'X', 'X', 0, 'active', '2026-01-01 00:00:00', '2026-01-01 00:00:00')"
         ));
+    }
+
+    /** @return array<int, array{t: int, u: int, r: int, b: int}> */
+    private function seedTenantGraph(Connection $db): array
+    {
+        $ts = "'2026-01-01 00:00:00'";
+        $ids = [];
+        foreach ([1, 2] as $n) {
+            $t = $this->tenant($db, "g$n");
+            $db->execute("INSERT INTO users (tenant_id, name, email, password_hash, status, is_owner, created_at, updated_at) VALUES (?, 'U', 'u$n@x.id', 'h', 'active', 0, $ts, $ts)", [$t]);
+            $u = $db->lastInsertId();
+            $db->execute("INSERT INTO roles (tenant_id, slug, name, is_system) VALUES (?, 'r', 'R', 0)", [$t]);
+            $r = $db->lastInsertId();
+            $db->execute("INSERT INTO branches (tenant_id, code, name, is_main, status, created_at, updated_at) VALUES (?, 'B', 'B', 0, 'active', $ts, $ts)", [$t]);
+            $b = $db->lastInsertId();
+            $ids[$n] = ['t' => $t, 'u' => $u, 'r' => $r, 'b' => $b];
+        }
+        return $ids;
+    }
+
+    public function testUserRolesRejectCrossTenantLinks(): void
+    {
+        $db = Db::fresh();
+        $g = $this->seedTenantGraph($db);
+        $sql = 'INSERT INTO user_roles (user_id, role_id, tenant_id) VALUES (?, ?, ?)';
+        foreach ([$g[1]['t'], $g[2]['t'], 999] as $tid) {
+            $this->assertThrows(PDOException::class, fn () => $db->execute($sql, [$g[1]['u'], $g[2]['r'], $tid]));
+        }
+        $this->assertSame(1, $db->execute($sql, [$g[1]['u'], $g[1]['r'], $g[1]['t']]));
+    }
+
+    public function testUserBranchAccessRejectsCrossTenantLinks(): void
+    {
+        $db = Db::fresh();
+        $g = $this->seedTenantGraph($db);
+        $sql = 'INSERT INTO user_branch_access (user_id, branch_id, tenant_id) VALUES (?, ?, ?)';
+        foreach ([$g[1]['t'], $g[2]['t'], 999] as $tid) {
+            $this->assertThrows(PDOException::class, fn () => $db->execute($sql, [$g[1]['u'], $g[2]['b'], $tid]));
+        }
+        $this->assertSame(1, $db->execute($sql, [$g[2]['u'], $g[2]['b'], $g[2]['t']]));
+    }
+
+    public function testRolePermissionsRejectWrongTenant(): void
+    {
+        $db = Db::fresh();
+        $g = $this->seedTenantGraph($db);
+        $perm = (int) $db->fetchOne("SELECT id FROM permissions WHERE code = 'users.view'")['id'];
+        $sql = 'INSERT INTO role_permissions (role_id, permission_id, tenant_id) VALUES (?, ?, ?)';
+        $this->assertThrows(PDOException::class, fn () => $db->execute($sql, [$g[1]['r'], $perm, $g[2]['t']]));
+        $this->assertThrows(PDOException::class, fn () => $db->execute($sql, [$g[1]['r'], $perm, 999]));
+        $this->assertSame(1, $db->execute($sql, [$g[1]['r'], $perm, $g[1]['t']]));
     }
 }

@@ -4,21 +4,23 @@
 CREATE TABLE platform_users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
-  email TEXT NOT NULL UNIQUE,
+  email TEXT NOT NULL,
   password_hash TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active',
   last_login_at TEXT NULL,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  CONSTRAINT uq_platform_users_email UNIQUE (email)
 );
 
 CREATE TABLE tenants (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  uuid TEXT NOT NULL UNIQUE,
+  uuid TEXT NOT NULL,
   name TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending_verification' CHECK (status IN ('pending_verification','active','suspended')),
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  CONSTRAINT uq_tenants_uuid UNIQUE (uuid)
 );
 
 CREATE TABLE tenant_profiles (
@@ -27,7 +29,7 @@ CREATE TABLE tenant_profiles (
   address TEXT NULL,
   phone TEXT NULL,
   logo_path TEXT NULL,
-  FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
+  CONSTRAINT fk_tenant_profiles_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
 );
 
 CREATE TABLE tenant_settings (
@@ -35,7 +37,7 @@ CREATE TABLE tenant_settings (
   timezone TEXT NOT NULL DEFAULT 'Asia/Jakarta',
   currency_code TEXT NOT NULL DEFAULT 'IDR',
   number_format TEXT NOT NULL DEFAULT 'id-ID',
-  FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
+  CONSTRAINT fk_tenant_settings_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
 );
 
 CREATE TABLE branches (
@@ -49,15 +51,16 @@ CREATE TABLE branches (
   status TEXT NOT NULL DEFAULT 'active',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  UNIQUE (tenant_id, code),
-  FOREIGN KEY (tenant_id) REFERENCES tenants (id)
+  CONSTRAINT uq_branches_tenant_code UNIQUE (tenant_id, code),
+  CONSTRAINT uq_branches_tenant_id UNIQUE (tenant_id, id),
+  CONSTRAINT fk_branches_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id)
 );
 
 CREATE TABLE users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   tenant_id INTEGER NOT NULL,
   name TEXT NOT NULL,
-  email TEXT NOT NULL UNIQUE,
+  email TEXT NOT NULL,
   phone TEXT NULL,
   password_hash TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending_verification' CHECK (status IN ('pending_verification','active','inactive')),
@@ -66,7 +69,9 @@ CREATE TABLE users (
   last_login_at TEXT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  FOREIGN KEY (tenant_id) REFERENCES tenants (id)
+  CONSTRAINT uq_users_email UNIQUE (email),
+  CONSTRAINT uq_users_tenant_id UNIQUE (tenant_id, id),
+  CONSTRAINT fk_users_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id)
 );
 
 CREATE TABLE roles (
@@ -75,15 +80,17 @@ CREATE TABLE roles (
   slug TEXT NOT NULL,
   name TEXT NOT NULL,
   is_system INTEGER NOT NULL DEFAULT 0,
-  UNIQUE (tenant_id, slug),
-  FOREIGN KEY (tenant_id) REFERENCES tenants (id)
+  CONSTRAINT uq_roles_tenant_slug UNIQUE (tenant_id, slug),
+  CONSTRAINT uq_roles_tenant_id UNIQUE (tenant_id, id),
+  CONSTRAINT fk_roles_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id)
 );
 
 CREATE TABLE permissions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  code TEXT NOT NULL UNIQUE,
+  code TEXT NOT NULL,
   module TEXT NOT NULL,
-  description TEXT NOT NULL
+  description TEXT NOT NULL,
+  CONSTRAINT uq_permissions_code UNIQUE (code)
 );
 
 CREATE TABLE role_permissions (
@@ -91,9 +98,8 @@ CREATE TABLE role_permissions (
   permission_id INTEGER NOT NULL,
   tenant_id INTEGER NOT NULL,
   PRIMARY KEY (role_id, permission_id),
-  FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE CASCADE,
-  FOREIGN KEY (permission_id) REFERENCES permissions (id),
-  FOREIGN KEY (tenant_id) REFERENCES tenants (id)
+  CONSTRAINT fk_role_permissions_role FOREIGN KEY (tenant_id, role_id) REFERENCES roles (tenant_id, id) ON DELETE CASCADE,
+  CONSTRAINT fk_role_permissions_permission FOREIGN KEY (permission_id) REFERENCES permissions (id)
 );
 
 CREATE TABLE user_roles (
@@ -101,9 +107,8 @@ CREATE TABLE user_roles (
   role_id INTEGER NOT NULL,
   tenant_id INTEGER NOT NULL,
   PRIMARY KEY (user_id, role_id),
-  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-  FOREIGN KEY (role_id) REFERENCES roles (id),
-  FOREIGN KEY (tenant_id) REFERENCES tenants (id)
+  CONSTRAINT fk_user_roles_user FOREIGN KEY (tenant_id, user_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE,
+  CONSTRAINT fk_user_roles_role FOREIGN KEY (tenant_id, role_id) REFERENCES roles (tenant_id, id)
 );
 
 CREATE TABLE user_branch_access (
@@ -111,9 +116,8 @@ CREATE TABLE user_branch_access (
   branch_id INTEGER NOT NULL,
   tenant_id INTEGER NOT NULL,
   PRIMARY KEY (user_id, branch_id),
-  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-  FOREIGN KEY (branch_id) REFERENCES branches (id),
-  FOREIGN KEY (tenant_id) REFERENCES tenants (id)
+  CONSTRAINT fk_user_branch_access_user FOREIGN KEY (tenant_id, user_id) REFERENCES users (tenant_id, id) ON DELETE CASCADE,
+  CONSTRAINT fk_user_branch_access_branch FOREIGN KEY (tenant_id, branch_id) REFERENCES branches (tenant_id, id)
 );
 
 CREATE TABLE demo_settings (
@@ -131,29 +135,31 @@ CREATE TABLE tenant_demos (
   granted_by_platform_user_id INTEGER NULL,
   reason TEXT NULL,
   created_at TEXT NOT NULL,
-  FOREIGN KEY (tenant_id) REFERENCES tenants (id),
-  FOREIGN KEY (granted_by_platform_user_id) REFERENCES platform_users (id)
+  CONSTRAINT fk_tenant_demos_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id),
+  CONSTRAINT fk_tenant_demos_granted_by_platform_user_id FOREIGN KEY (granted_by_platform_user_id) REFERENCES platform_users (id)
 );
 
 CREATE TABLE email_verifications (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
-  token_hash TEXT NOT NULL UNIQUE,
+  token_hash TEXT NOT NULL,
   expires_at TEXT NOT NULL,
   used_at TEXT NULL,
   created_at TEXT NOT NULL,
-  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+  CONSTRAINT uq_email_verifications_token UNIQUE (token_hash),
+  CONSTRAINT fk_email_verifications_user_id FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
 CREATE TABLE password_resets (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
-  token_hash TEXT NOT NULL UNIQUE,
+  token_hash TEXT NOT NULL,
   expires_at TEXT NOT NULL,
   used_at TEXT NULL,
   ip TEXT NULL,
   created_at TEXT NOT NULL,
-  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+  CONSTRAINT uq_password_resets_token UNIQUE (token_hash),
+  CONSTRAINT fk_password_resets_user_id FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
 CREATE TABLE login_attempts (
@@ -176,5 +182,5 @@ CREATE TABLE audit_logs (
   ip TEXT NULL,
   request_id TEXT NULL,
   created_at TEXT NOT NULL,
-  FOREIGN KEY (tenant_id) REFERENCES tenants (id)
+  CONSTRAINT fk_audit_logs_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id)
 );
