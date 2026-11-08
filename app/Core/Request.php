@@ -49,6 +49,7 @@ final class Request
             $headers,
             $_FILES,
             is_string($_SERVER['REMOTE_ADDR'] ?? null) ? $_SERVER['REMOTE_ADDR'] : '0.0.0.0',
+            ['https' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'],
         );
     }
 

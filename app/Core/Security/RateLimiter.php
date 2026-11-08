@@ -1,0 +1,55 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Core\Security;
+
+use App\Core\Database\Connection;
+use Closure;
+
+final class RateLimiter
+{
+    private Closure $clock;
+
+    /** @param (callable(): int)|null $clock */
+    public function __construct(
+        private readonly Connection $db,
+        private readonly int $maxAttempts,
+        private readonly int $windowSeconds,
+        ?callable $clock = null,
+    ) {
+        $this->clock = $clock !== null ? Closure::fromCallable($clock) : static fn (): int => time();
+    }
+
+    public function tooManyAttempts(string $email, string $ip): bool
+    {
+        $since = gmdate('Y-m-d H:i:s', ($this->clock)() - $this->windowSeconds);
+        $row = $this->db->fetchOne(
+            'SELECT COUNT(*) AS n FROM login_attempts
+             WHERE identifier_hash = ? AND ip = ? AND succeeded = 0 AND attempted_at >= ?',
+            [self::identifier($email), $ip, $since]
+        );
+        return (int) ($row['n'] ?? 0) >= $this->maxAttempts;
+    }
+
+    public function record(string $email, string $ip, bool $succeeded): void
+    {
+        $this->db->execute(
+            'INSERT INTO login_attempts (identifier_hash, ip, succeeded, attempted_at) VALUES (?, ?, ?, ?)',
+            [self::identifier($email), $ip, $succeeded ? 1 : 0, gmdate('Y-m-d H:i:s', ($this->clock)())]
+        );
+    }
+
+    public function clear(string $email, string $ip): void
+    {
+        $this->db->execute(
+            'DELETE FROM login_attempts WHERE identifier_hash = ? AND ip = ?',
+            [self::identifier($email), $ip]
+        );
+    }
+
+    private static function identifier(string $email): string
+    {
+        return hash('sha256', strtolower(trim($email)));
+    }
+}

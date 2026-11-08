@@ -13,6 +13,9 @@ final class Router
     /** @var list<array{method: string, regex: string, handler: callable|array<int, string>, middleware: array<int, MiddlewareInterface|string>}> */
     private array $routes = [];
 
+    /** @var list<MiddlewareInterface|string> */
+    private array $globalMiddleware = [];
+
     /** @var Closure(string): object */
     private Closure $resolver;
 
@@ -42,6 +45,12 @@ final class Router
     public function post(string $pattern, callable|array $handler, array $middleware = []): void
     {
         $this->add('POST', $pattern, $handler, $middleware);
+    }
+
+    /** Middleware global dijalankan sebelum middleware rute, sesuai urutan penambahan. */
+    public function addGlobalMiddleware(MiddlewareInterface|string $middleware): void
+    {
+        $this->globalMiddleware[] = $middleware;
     }
 
     public function dispatch(Request $request): Response
@@ -107,7 +116,7 @@ final class Router
         };
 
         $next = $core;
-        foreach (array_reverse($middleware) as $item) {
+        foreach (array_reverse([...$this->globalMiddleware, ...$middleware]) as $item) {
             $instance = is_string($item) ? ($this->resolver)($item) : $item;
             $next = static fn (Request $req): Response => $instance->handle($req, $next);
         }
