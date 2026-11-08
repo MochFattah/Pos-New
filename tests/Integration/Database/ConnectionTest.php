@@ -95,4 +95,55 @@ final class ConnectionTest extends TestCase
         $dsn = Connection::mysqlDsn(['host' => 'db.local', 'port' => 3307, 'name' => 'pos', 'charset' => 'utf8mb4']);
         $this->assertSame('mysql:host=db.local;port=3307;dbname=pos;charset=utf8mb4', $dsn);
     }
+
+    public function testOriginalExceptionInstanceIsRethrown(): void
+    {
+        $original = new RuntimeException('asli');
+        $caught = null;
+        try {
+            $this->db->transaction(function () use ($original): void {
+                throw $original;
+            });
+        } catch (\Throwable $e) {
+            $caught = $e;
+        }
+        $this->assertSame($original, $caught);
+    }
+
+    public function testNonExceptionThrowableRollsBackAndRethrows(): void
+    {
+        $this->assertThrows(\TypeError::class, function (): void {
+            $this->db->transaction(function (): void {
+                $this->db->execute('INSERT INTO t (v) VALUES (?)', ['gone']);
+                throw new \TypeError('salah tipe');
+            });
+        });
+        $this->assertSame(0, count($this->db->query('SELECT * FROM t')));
+    }
+
+    public function testConnectionReusableAndDepthResetAfterFailure(): void
+    {
+        try {
+            $this->db->transaction(function (): void {
+                $this->db->transaction(function (): void {
+                    throw new \Error('x');
+                });
+            });
+        } catch (\Error) {
+        }
+        $this->db->transaction(function (): void {
+            $this->db->execute('INSERT INTO t (v) VALUES (?)', ['a']);
+            try {
+                $this->db->transaction(function (): void {
+                    $this->db->execute('INSERT INTO t (v) VALUES (?)', ['b']);
+                    throw new RuntimeException('inner');
+                });
+            } catch (RuntimeException) {
+            }
+            $this->db->transaction(function (): void {
+                $this->db->execute('INSERT INTO t (v) VALUES (?)', ['c']);
+            });
+        });
+        $this->assertSame([['v' => 'a'], ['v' => 'c']], $this->db->query('SELECT v FROM t ORDER BY id'));
+    }
 }

@@ -7,7 +7,7 @@ namespace App\Core\Database;
 use RuntimeException;
 use Throwable;
 
-final class Migrator
+class Migrator
 {
     public function __construct(private readonly Connection $db, private readonly string $dir)
     {
@@ -39,7 +39,10 @@ final class Migrator
 
     private function apply(string $name): void
     {
-        $sql = (string) file_get_contents(rtrim($this->dir, '/') . '/' . $name);
+        $sql = $this->readFile(rtrim($this->dir, '/') . '/' . $name);
+        if ($sql === false) {
+            throw new RuntimeException("Migrasi $name gagal: berkas tidak dapat dibaca.");
+        }
         $statements = self::split($sql, $this->db->driver() === 'mysql');
 
         $run = function () use ($statements, $name): void {
@@ -62,6 +65,12 @@ final class Migrator
         } catch (Throwable $e) {
             throw new RuntimeException("Migrasi $name gagal: " . $e->getMessage(), 0, $e);
         }
+    }
+
+    /** Seam pembacaan berkas agar kegagalan baca dapat diuji. */
+    protected function readFile(string $path): string|false
+    {
+        return @file_get_contents($path);
     }
 
     /**

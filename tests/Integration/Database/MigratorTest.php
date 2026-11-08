@@ -78,9 +78,70 @@ final class MigratorTest extends TestCase
             $message = $e->getMessage();
         }
         $this->assertContains('002_bad.sql', $message);
+        $this->assertSame(0, count($this->db->query("SELECT name FROM sqlite_master WHERE name = 'd'")));
         $names = array_column($this->db->query('SELECT name FROM schema_migrations'), 'name');
         $this->assertSame(['001_a.sql'], $names);
         // SQLite: DDL transactional, tabel c ikut di-rollback
         $this->assertSame(0, count($this->db->query("SELECT name FROM sqlite_master WHERE name = 'c'")));
+    }
+
+    public function testUnreadableFileIsNotRecorded(): void
+    {
+        $this->write('001_a.sql', 'CREATE TABLE a (id INTEGER);');
+        $m = new class ($this->db, $this->dir) extends Migrator {
+            protected function readFile(string $path): string|false
+            {
+                return false;
+            }
+        };
+        $message = '';
+        try {
+            $m->migrate();
+        } catch (RuntimeException $e) {
+            $message = $e->getMessage();
+        }
+        $this->assertContains('001_a.sql', $message);
+        $this->assertSame(0, count($this->db->query('SELECT name FROM schema_migrations')));
+        $this->assertSame([], $this->db->query("SELECT name FROM sqlite_master WHERE name = 'a'"));
+    }
+
+    public function testSplitBlockCommentWithSemicolon(): void
+    {
+        $parts = Migrator::split('SELECT 1 /* a ; b */ , 2; SELECT 3');
+        $this->assertSame(2, count($parts));
+        $this->assertSame('SELECT 3', $parts[1]);
+        $this->assertSame(false, str_contains($parts[0], 'a ; b'));
+        $this->assertSame(1, preg_match('/^SELECT 1\s+,\s*2$/', $parts[0]));
+    }
+
+    public function testSplitQuotedSemicolons(): void
+    {
+        $sql = <<<'SQL'
+SELECT "a;b"; SELECT `c;d` FROM t; SELECT 'x -- y # z'; SELECT "p#q--r";
+SQL;
+        $this->assertSame(
+            ['SELECT "a;b"', 'SELECT `c;d` FROM t', "SELECT 'x -- y # z'", 'SELECT "p#q--r"'],
+            Migrator::split($sql)
+        );
+    }
+
+    public function testSplitBackslashEscapeOnlyInMysqlMode(): void
+    {
+        // Mode MySQL tidak dijalankan di SQLite, jadi splitter diuji langsung dengan flag.
+        $sql = <<<'SQL'
+SELECT 'it\'s;ok'; SELECT 2
+SQL;
+        $this->assertSame([<<<'SQL'
+SELECT 'it\'s;ok'
+SQL, 'SELECT 2'], Migrator::split($sql, true));
+        // Tanpa mode MySQL, \' menutup string lebih awal sehingga pemecahan berbeda.
+        $this->assertSame(2, count(Migrator::split($sql, false)));
+        $this->assertSame(false, Migrator::split($sql, false) === Migrator::split($sql, true));
+    }
+
+    public function testSplitCrlfAndEmptyStatements(): void
+    {
+        $this->assertSame(['SELECT 1', 'SELECT 2'], Migrator::split("SELECT 1;;\r\n;  ;\r\nSELECT 2;\r\n"));
+        $this->assertSame(['SELECT 1'], Migrator::split("-- c;\r\nSELECT 1;\r\n# d;\r\n"));
     }
 }

@@ -15,10 +15,15 @@ use App\Core\Database\Connection;
 use App\Core\Database\Migrator;
 use App\Core\Env;
 
-Env::load($basePath . '/.env');
-Config::load($basePath);
-
-$applied = (new Migrator(Connection::fromConfig(), $basePath . '/database/migrations'))->migrate();
+try {
+    Env::load($basePath . '/.env');
+    Config::load($basePath);
+    $applied = (new Migrator(Connection::fromConfig(), $basePath . '/database/migrations'))->migrate();
+} catch (Throwable $e) {
+    // Hanya pesan; tanpa stack trace agar DSN/kredensial tidak bocor.
+    fwrite(STDERR, 'Migrasi gagal: ' . $e->getMessage() . "\n");
+    exit(1);
+}
 
 if ($applied === []) {
     echo "Tidak ada migrasi baru.\n";
