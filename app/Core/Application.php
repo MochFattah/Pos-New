@@ -18,11 +18,13 @@ final class Application
         private string $logFile,
         private bool $debug = false,
         private bool $forceHttps = false,
+        private ?RequestContext $context = null,
     ) {
     }
 
     public function handle(Request $request): Response
     {
+        $this->context?->bind($request);
         return SecurityHeaders::apply(
             $this->dispatch($request),
             $this->forceHttps || $request->attribute('https') === true
@@ -38,7 +40,7 @@ final class Application
         } catch (HttpException $e) {
             return self::page($e->status(), $e->getMessage() !== '' ? $e->getMessage() : 'Permintaan tidak dapat diproses.');
         } catch (Throwable $e) {
-            $id = bin2hex(random_bytes(6));
+            $id = $this->context?->requestId() ?? bin2hex(random_bytes(6));
             $this->log($id, $request, $e);
             $detail = $this->debug ? $e::class . ': ' . $e->getMessage() : null;
             return self::page(500, 'Terjadi kesalahan pada server.', $id, $detail);

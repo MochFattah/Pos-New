@@ -8,9 +8,13 @@ use App\Core\Env;
 use App\Core\Middleware\CsrfMiddleware;
 use App\Core\Middleware\SecurityHeadersMiddleware;
 use App\Core\Middleware\SessionMiddleware;
+use App\Core\RequestContext;
 use App\Core\Router;
 use App\Core\Security\NativeSessionStorage;
 use App\Core\Security\Session;
+use App\Modules\AuditLogs\Repositories\AuditLogRepository;
+use App\Modules\AuditLogs\Services\AuditLogger;
+use App\Core\Database\Connection;
 
 $basePath = dirname(__DIR__);
 
@@ -47,12 +51,21 @@ $buildRouter = static function () use ($basePath, $buildGlobalMiddleware): Route
     return $router;
 };
 
-$buildApplication = static function (Router $router) use ($basePath, $forceSecure): Application {
+$requestContext = new RequestContext();
+
+/** Builder AuditLogger; layanan fitur memanggilnya saat dirakit. */
+$buildAuditLogger = static fn (Connection $db): AuditLogger => new AuditLogger(
+    new AuditLogRepository($db),
+    static fn (): array => $requestContext->toArray()
+);
+
+$buildApplication = static function (Router $router) use ($basePath, $forceSecure, $requestContext): Application {
     return new Application(
         $router,
         $basePath . '/storage/logs/app.log',
         (bool) Config::get('app.debug', false),
-        $forceSecure
+        $forceSecure,
+        $requestContext
     );
 };
 
