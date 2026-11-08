@@ -8,6 +8,9 @@ final class Validator
 {
     private const EMAIL_MAX = 190;
 
+    /** Field yang nilainya tidak boleh di-trim atau dinormalisasi. */
+    private const RAW_FIELDS = ['password', 'password_confirmation', 'current_password', 'new_password'];
+
     /**
      * @param array<string, mixed> $data
      * @param array<string, string> $rules mis. ['email' => 'required|email|max:190']
@@ -29,7 +32,8 @@ final class Validator
                 continue;
             }
 
-            $value = trim((string) ($raw ?? ''));
+            $isRaw = in_array($field, self::RAW_FIELDS, true) || in_array('raw', $ruleList, true);
+            $value = $isRaw ? (string) ($raw ?? '') : trim((string) ($raw ?? ''));
             if ($value === '') {
                 if (in_array('required', $ruleList, true)) {
                     $errors[$field] = self::upper($label) . ' wajib diisi.';
@@ -42,7 +46,7 @@ final class Validator
             $error = null;
             foreach ($ruleList as $rule) {
                 [$name, $arg] = array_pad(explode(':', $rule, 2), 2, '');
-                $error = self::check($name, $arg, $value, $field, $data, $label);
+                $error = self::check($name, $arg, $value, $field, $data, $label, $isRaw);
                 if ($error !== null) {
                     break;
                 }
@@ -68,10 +72,11 @@ final class Validator
     }
 
     /** @param array<string, mixed> $data */
-    private static function check(string $rule, string $arg, string $value, string $field, array $data, string $label): ?string
+    private static function check(string $rule, string $arg, string $value, string $field, array $data, string $label, bool $isRaw = false): ?string
     {
         switch ($rule) {
             case 'required':
+            case 'raw':
                 return null;
             case 'email':
                 if (mb_strlen($value) > self::EMAIL_MAX
@@ -88,7 +93,13 @@ final class Validator
                     ? self::upper($label) . ' maksimal ' . (int) $arg . ' karakter.' : null;
             case 'confirmed':
                 $other = $data[$field . '_confirmation'] ?? null;
-                $other = is_scalar($other) ? trim((string) $other) : null;
+                if (is_scalar($other)) {
+                    $other = (string) $other;
+                    $isRaw = $isRaw || in_array($field . '_confirmation', self::RAW_FIELDS, true);
+                    $other = $isRaw ? $other : trim($other);
+                } else {
+                    $other = null;
+                }
                 return $other === $value ? null : 'Konfirmasi ' . self::lower($label) . ' tidak cocok.';
             case 'phone':
                 if (preg_match('/^\+?[\d\s\-()]+$/', $value) !== 1

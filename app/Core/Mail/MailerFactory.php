@@ -11,15 +11,24 @@ final class MailerFactory
     public static function fromConfig(): MailerInterface
     {
         $cfg = Config::get('mail', []);
-        return self::fromArray(is_array($cfg) ? $cfg : [], dirname(__DIR__, 3) . '/storage/logs/mail.log');
+        return self::fromArray(is_array($cfg) ? $cfg : [], dirname(__DIR__, 3));
     }
 
-    /** @param array<string, mixed> $cfg */
-    public static function fromArray(array $cfg, string $logPath): MailerInterface
+    /**
+     * @param array<string, mixed> $cfg
+     * @param string $basePath dasar untuk path log relatif
+     * @param callable|null $connector seam pengujian untuk SmtpMailer
+     */
+    public static function fromArray(array $cfg, string $basePath, ?callable $connector = null): MailerInterface
     {
         $driver = (string) ($cfg['driver'] ?? 'log');
         if ($driver === 'log') {
-            return new LogMailer($logPath);
+            $path = trim((string) ($cfg['log_path'] ?? ''));
+            if ($path === '') {
+                $path = 'storage/logs/mail.log';
+            }
+            $absolute = str_starts_with($path, '/') || preg_match('#^[A-Za-z]:[\\/]#', $path) === 1;
+            return new LogMailer($absolute ? $path : rtrim($basePath, '/') . '/' . $path);
         }
         if ($driver === 'smtp') {
             return new SmtpMailer(
@@ -29,9 +38,9 @@ final class MailerFactory
                 (string) ($cfg['password'] ?? ''),
                 (string) ($cfg['from_address'] ?? ''),
                 (string) ($cfg['encryption'] ?? 'tls'),
-                null,
+                $connector,
                 (string) ($cfg['ehlo_hostname'] ?? 'localhost'),
-                (int) ($cfg['timeout'] ?? 10),
+                (float) ($cfg['timeout'] ?? 10),
                 (string) ($cfg['from_name'] ?? '')
             );
         }

@@ -85,4 +85,58 @@ final class ValidatorTest extends TestCase
         $r = Validator::make(['name' => ['a']], ['name' => 'required|min:2'], ['name' => 'Nama']);
         $this->assertSame('Nama tidak valid.', $r->errors()['name']);
     }
+
+    public function testPasswordIsNotTrimmedAndReturnedRaw(): void
+    {
+        $r = Validator::make(
+            ['password' => '  pass word ', 'password_confirmation' => '  pass word '],
+            ['password' => 'required|min:8|confirmed']
+        );
+        $this->assertFalse($r->fails());
+        $this->assertSame('  pass word ', $r->validated()['password']);
+    }
+
+    public function testPasswordMinCountsSpaces(): void
+    {
+        $this->assertFalse(Validator::make(['password' => '   a    '], ['password' => 'required|min:8'])->fails());
+        $this->assertTrue(Validator::make(['password' => ' abc '], ['password' => 'required|min:8'])->fails());
+    }
+
+    public function testPasswordConfirmationComparesRawStrings(): void
+    {
+        $r = Validator::make(['password' => 'abcdefgh', 'password_confirmation' => 'abcdefgh '], ['password' => 'required|confirmed']);
+        $this->assertSame(['password' => 'Konfirmasi password tidak cocok.'], $r->errors());
+    }
+
+    public function testPasswordOfOnlySpacesSatisfiesRequiredButEmptyDoesNot(): void
+    {
+        $this->assertFalse(Validator::make(['password' => '   '], ['password' => 'required'])->fails());
+        $this->assertTrue(Validator::make(['password' => ''], ['password' => 'required'])->fails());
+    }
+
+    public function testOtherPasswordFieldNamesAreRaw(): void
+    {
+        foreach (['current_password', 'new_password'] as $f) {
+            $r = Validator::make([$f => ' x '], [$f => 'required']);
+            $this->assertSame(' x ', $r->validated()[$f]);
+        }
+    }
+
+    public function testNonPasswordFieldsStillTrimmed(): void
+    {
+        $r = Validator::make(['name' => '  Budi  '], ['name' => 'required']);
+        $this->assertSame('Budi', $r->validated()['name']);
+    }
+
+    public function testRawRuleOptsOutOfTrimmingOnArbitraryField(): void
+    {
+        $r = Validator::make(
+            ['pin' => ' 12 34 ', 'pin_confirmation' => ' 12 34 '],
+            ['pin' => 'required|raw|min:7|confirmed']
+        );
+        $this->assertFalse($r->fails());
+        $this->assertSame(' 12 34 ', $r->validated()['pin']);
+        $bad = Validator::make(['pin' => ' 12 34 ', 'pin_confirmation' => '12 34'], ['pin' => 'raw|confirmed']);
+        $this->assertTrue($bad->fails());
+    }
 }

@@ -22,11 +22,17 @@ class SmtpMailer implements MailerInterface
         private string $encryption,
         ?callable $connector = null,
         private string $ehloHostname = 'localhost',
-        private int $timeout = 10,
+        private float $timeout = 10.0,
         private string $fromName = ''
     ) {
         if (!in_array($encryption, ['none', 'starttls', 'tls'], true)) {
             throw new MailException('Mode enkripsi SMTP tidak dikenal.');
+        }
+        if ($host === '' || trim($host) === '') {
+            throw new MailException('Host SMTP belum dikonfigurasi.');
+        }
+        if (filter_var($from, FILTER_VALIDATE_EMAIL) === false) {
+            throw new MailException('Alamat pengirim SMTP belum dikonfigurasi atau tidak valid.');
         }
         $this->connector = $connector;
     }
@@ -74,13 +80,14 @@ class SmtpMailer implements MailerInterface
                 sprintf('%s://%s:%d', $scheme, $this->host, $this->port),
                 $errno,
                 $errstr,
-                (float) $this->timeout
+                $this->timeout
             );
         }
         if (!is_resource($stream)) {
             throw new MailException('Tidak dapat terhubung ke server SMTP.');
         }
-        stream_set_timeout($stream, $this->timeout);
+        $seconds = (int) floor($this->timeout);
+        stream_set_timeout($stream, $seconds, (int) round(($this->timeout - $seconds) * 1_000_000));
         return $stream;
     }
 

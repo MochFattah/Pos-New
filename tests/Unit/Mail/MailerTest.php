@@ -93,21 +93,19 @@ final class MailerTest extends TestCase
         $m->send('budi@example.com', 'Verifikasi Email', "Baris satu\n.titik awal\nBaris tiga");
         $w = $this->drain($server);
 
-        $expected = [
-            "EHLO pos.local\r\n",
-            "AUTH LOGIN\r\n",
-            base64_encode('user') . "\r\n",
-            base64_encode('S3cretPass') . "\r\n",
-            "MAIL FROM:<no-reply@toko.test>\r\n",
-            "RCPT TO:<budi@example.com>\r\n",
-            "DATA\r\n",
-        ];
-        $pos = 0;
-        foreach ($expected as $line) {
-            $i = strpos($w, $line, $pos);
-            $this->assertTrue($i !== false, 'urutan perintah salah di: ' . trim($line));
-            $pos = $i + strlen($line);
-        }
+        $lines = explode("\r\n", $w);
+        $dataAt = array_search('DATA', $lines, true);
+        $this->assertTrue($dataAt !== false);
+        $this->assertSame([
+            'EHLO pos.local',
+            'AUTH LOGIN',
+            base64_encode('user'),
+            base64_encode('S3cretPass'),
+            'MAIL FROM:<no-reply@toko.test>',
+            'RCPT TO:<budi@example.com>',
+            'DATA',
+        ], array_slice($lines, 0, $dataAt + 1));
+        $this->assertSame(['.', 'QUIT', ''], array_slice($lines, -3));
         $this->assertContains("Subject: Verifikasi Email\r\n", $w);
         $this->assertContains("To: <budi@example.com>\r\n", $w);
         $this->assertContains("MIME-Version: 1.0\r\n", $w);
@@ -193,8 +191,76 @@ final class MailerTest extends TestCase
         $m = new SmtpMailer('h', 25, '', '', 'a@toko.test', 'none', static fn () => false);
         $this->assertThrows(MailException::class, fn () => $m->send('b@x.com', 's', 'x'));
         [$connector] = $this->pair(['220 hi']);
-        $m2 = new SmtpMailer('h', 25, '', '', 'a@toko.test', 'none', $connector, 'localhost', 1);
+        $m2 = new SmtpMailer('h', 25, '', '', 'a@toko.test', 'none', $connector, 'localhost', 0.05);
         $this->assertThrows(MailException::class, fn () => $m2->send('b@x.com', 's', 'x'));
+    }
+
+    public function testSmtpMailerTimeoutIsSubSecondAndReportsIndonesianMessage(): void
+    {
+        [$connector] = $this->pair([]);
+        $m = new SmtpMailer('h', 25, 'user', 'S3cretPass', 'a@toko.test', 'none', $connector, 'localhost', 0.05);
+        $t = microtime(true);
+        try {
+            $m->send('b@x.com', 's', 'x');
+            $this->fail('harus melempar');
+        } catch (MailException $e) {
+            $this->assertContains('Waktu tunggu server SMTP habis', $e->getMessage());
+            $this->assertFalse(str_contains($e->getMessage(), 'S3cretPass'));
+            $this->assertFalse(str_contains($e->getMessage(), 'user'));
+        }
+        $this->assertTrue(microtime(true) - $t < 0.9, 'waktu tunggu harus di bawah satu detik');
+    }
+
+    public function testSmtpMailerNormalisesBareCrAndLfToCrlf(): void
+    {
+        [$connector, $server] = $this->pair(['220 hi', '250 ok', '250 f', '250 r', '354 go', '250 q', '221 b']);
+        (new SmtpMailer('h', 25, '', '', 'a@toko.test', 'none', $connector, 'localhost', 2))->send('b@x.com', 's', "a\rb\nc\r\nd");
+        $this->assertContains("\r\n\r\na\r\nb\r\nc\r\nd\r\n.\r\n", $this->drain($server));
+    }
+
+    public function testSmtpMailerStuffsDotOnFirstBodyLine(): void
+    {
+        [$connector, $server] = $this->pair(['220 hi', '250 ok', '250 f', '250 r', '354 go', '250 q', '221 b']);
+        (new SmtpMailer('h', 25, '', '', 'a@toko.test', 'none', $connector, 'localhost', 2))->send('b@x.com', 's', ".awal\nlain");
+        $this->assertContains("\r\n\r\n..awal\r\nlain\r\n.\r\n", $this->drain($server));
+    }
+
+    public function testSmtpMailerAssemblesMultilineReplyAcrossPartialReads(): void
+    {
+        ChunkedStream::$script = implode("\r\n", ['220 hi', '250-satu', '250-dua', '250 tiga', '250 f', '250 r', '354 go', '250 q', '221 b']) . "\r\n";
+        ChunkedStream::$written = '';
+        ChunkedStream::register();
+        $connector = static fn () => fopen('chunked://x', 'r+');
+        (new SmtpMailer('h', 25, '', '', 'a@toko.test', 'none', $connector, 'localhost', 2))->send('b@x.com', 's', 'x');
+        $this->assertTrue(str_starts_with(ChunkedStream::$written, "EHLO localhost\r\nMAIL FROM:<a@toko.test>\r\nRCPT TO:<b@x.com>\r\nDATA\r\n"));
+        $this->assertTrue(str_ends_with(ChunkedStream::$written, "\r\n.\r\nQUIT\r\n"));
+    }
+
+    public function testSmtpMailerEncodesNonAsciiFromName(): void
+    {
+        [$connector, $server] = $this->pair(['220 hi', '250 ok', '250 f', '250 r', '354 go', '250 q', '221 b']);
+        (new SmtpMailer('h', 25, '', '', 'a@toko.test', 'none', $connector, 'localhost', 2, 'Toko Sëhat'))->send('b@x.com', 's', 'x');
+        $w = $this->drain($server);
+        $this->assertTrue(preg_match('/^From: (.*)$/m', $w, $m) === 1);
+        $this->assertContains('=?UTF-8?B?', $m[1]);
+        $this->assertFalse(str_contains($m[1], 'Sëhat'));
+        $this->assertSame('Toko Sëhat <a@toko.test>', iconv_mime_decode(rtrim($m[0]), 0, 'UTF-8') === false ? '' : substr(iconv_mime_decode(rtrim($m[0]), 0, 'UTF-8'), 6));
+    }
+
+    public function testSmtpMailerSplitsLongMultibyteSubjectIntoValidEncodedWords(): void
+    {
+        $subject = str_repeat('Pembayaran Ñandú Ünggul ', 6);
+        $this->assertTrue(strlen($subject) > 90);
+        [$connector, $server] = $this->pair(['220 hi', '250 ok', '250 f', '250 r', '354 go', '250 q', '221 b']);
+        (new SmtpMailer('h', 25, '', '', 'a@toko.test', 'none', $connector, 'localhost', 2))->send('b@x.com', $subject, 'x');
+        $w = $this->drain($server);
+        $this->assertTrue(preg_match('/^Subject: [^\r\n]*(?:\r\n [^\r\n]*)*/m', $w, $m) === 1);
+        $header = $m[0];
+        $this->assertTrue(preg_match_all('/=\?UTF-8\?B\?[A-Za-z0-9+\/=]+\?=/', $header, $words) >= 2);
+        foreach ($words[0] as $word) {
+            $this->assertTrue(strlen($word) <= 75, 'encoded-word > 75: ' . strlen($word));
+        }
+        $this->assertSame($subject, substr((string) iconv_mime_decode($header, 0, 'UTF-8'), 9));
     }
 
     public function testSmtpMailerRejectsUnknownEncryption(): void
@@ -204,10 +270,102 @@ final class MailerTest extends TestCase
 
     public function testFactoryDefaultsToLogAndBuildsSmtp(): void
     {
-        $this->assertTrue(MailerFactory::fromArray([], '/x/mail.log') instanceof LogMailer);
-        $this->assertTrue(MailerFactory::fromArray(['driver' => 'log'], '/x/mail.log') instanceof LogMailer);
-        $smtp = MailerFactory::fromArray(['driver' => 'smtp', 'host' => 'h', 'port' => 25, 'from_address' => 'a@b.com', 'encryption' => 'none'], '/x/mail.log');
+        $this->assertTrue(MailerFactory::fromArray([], '/x') instanceof LogMailer);
+        $this->assertTrue(MailerFactory::fromArray(['driver' => 'log'], '/x') instanceof LogMailer);
+        $smtp = MailerFactory::fromArray(['driver' => 'smtp', 'host' => 'h', 'port' => 25, 'from_address' => 'a@b.com', 'encryption' => 'none'], '/x');
         $this->assertTrue($smtp instanceof SmtpMailer);
-        $this->assertThrows(MailException::class, fn () => MailerFactory::fromArray(['driver' => 'pigeon'], '/x/mail.log'));
+        $this->assertThrows(MailException::class, fn () => MailerFactory::fromArray(['driver' => 'pigeon'], '/x'));
+    }
+
+    public function testFactoryLogMailerWritesToConfiguredPath(): void
+    {
+        $abs = $this->dir . '/abs/custom.log';
+        MailerFactory::fromArray(['driver' => 'log', 'log_path' => $abs], $this->dir . '/base')->send('a@b.com', 'S', 'isi');
+        $this->assertContains('To: a@b.com', (string) file_get_contents($abs));
+
+        MailerFactory::fromArray(['driver' => 'log', 'log_path' => 'var/rel.log'], $this->dir . '/base')->send('c@b.com', 'S', 'isi');
+        $this->assertContains('To: c@b.com', (string) file_get_contents($this->dir . '/base/var/rel.log'));
+
+        MailerFactory::fromArray(['driver' => 'log'], $this->dir . '/base')->send('d@b.com', 'S', 'isi');
+        $this->assertContains('To: d@b.com', (string) file_get_contents($this->dir . '/base/storage/logs/mail.log'));
+    }
+
+    public function testFactoryFailsEarlyOnIncompleteSmtpConfig(): void
+    {
+        $ok = ['driver' => 'smtp', 'host' => 'h', 'port' => 25, 'from_address' => 'a@b.com', 'encryption' => 'none'];
+        $this->assertThrows(MailException::class, fn () => MailerFactory::fromArray(['host' => ''] + $ok, '/x'));
+        $this->assertThrows(MailException::class, fn () => MailerFactory::fromArray(['from_address' => ''] + $ok, '/x'));
+    }
+
+    public function testFactoryBuildsWorkingSmtpMailerFromConfig(): void
+    {
+        [$connector, $server] = $this->pair(['220 hi', '250 AUTH LOGIN', '334 a', '334 b', '235 ok', '250 f', '250 r', '354 go', '250 q', '221 b']);
+        $mailer = MailerFactory::fromArray([
+            'driver' => 'smtp', 'host' => 'smtp.test', 'port' => 25, 'username' => 'u', 'password' => 'p',
+            'from_address' => 'no-reply@toko.test', 'from_name' => 'Toko', 'encryption' => 'none',
+            'timeout' => 2.5, 'ehlo_hostname' => 'pos.local',
+        ], '/x', $connector);
+        $this->assertTrue($mailer instanceof SmtpMailer);
+        $mailer->send('b@x.com', 'Halo', 'isi');
+        $w = $this->drain($server);
+        $this->assertTrue(str_starts_with($w, "EHLO pos.local\r\nAUTH LOGIN\r\n"));
+        $this->assertContains('From: "Toko" <no-reply@toko.test>', $w);
+    }
+}
+
+/** Aliran palsu yang menyajikan skrip balasan paling banyak 3 byte per pembacaan. */
+final class ChunkedStream
+{
+    public static string $script = '';
+    public static string $written = '';
+    private int $pos = 0;
+    /** @var resource|null */
+    public $context;
+
+    public static function register(): void
+    {
+        if (!in_array('chunked', stream_get_wrappers(), true)) {
+            stream_wrapper_register('chunked', self::class);
+        }
+    }
+
+    public function stream_open(string $path, string $mode, int $options, ?string &$opened): bool
+    {
+        $this->pos = 0;
+        return true;
+    }
+
+    public function stream_read(int $count): string|false
+    {
+        // Potongan tidak melewati akhir baris agar tidak ada data tersisa di buffer baca PHP.
+        $chunk = substr(self::$script, $this->pos, 3);
+        $nl = strpos($chunk, "\n");
+        if ($nl !== false) {
+            $chunk = substr($chunk, 0, $nl + 1);
+        }
+        $this->pos += strlen($chunk);
+        return $chunk;
+    }
+
+    public function stream_write(string $data): int
+    {
+        self::$written .= $data;
+        return strlen($data);
+    }
+
+    public function stream_eof(): bool
+    {
+        return $this->pos >= strlen(self::$script);
+    }
+
+    public function stream_set_option(int $option, int $arg1, ?int $arg2): bool
+    {
+        return false;
+    }
+
+    /** @return array<string, int> */
+    public function stream_stat(): array
+    {
+        return [];
     }
 }
