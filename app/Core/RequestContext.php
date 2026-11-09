@@ -16,6 +16,7 @@ final class RequestContext
     public function bind(Request $request): void
     {
         $this->request = $request;
+        $this->requestId = bin2hex(random_bytes(6));
     }
 
     public function requestId(): string

@@ -8,6 +8,8 @@ use App\Core\Database\Connection;
 use App\Modules\AuditLogs\Repositories\AuditLogRepository;
 use App\Modules\AuditLogs\Services\AuditLogger;
 use InvalidArgumentException;
+use JsonSerializable;
+use stdClass;
 use Tests\Support\Db;
 use Tests\Support\TestCase;
 
@@ -130,9 +132,141 @@ final class AuditLoggerTest extends TestCase
 
     public function testRecordedRowNeverContainsPlainPassword(): void
     {
-        $this->logger->record('tenant.registered', 1, 'system', null, null, null, ['password' => 'secret123', 'email' => 'a@b.c']);
+        $this->logger->record('tenant.registered', 1, 'system', null, null, null, ['password' => 'S3NT1NEL-xyz', 'email' => 'a@b.c']);
         $row = $this->lastRow();
-        $this->assertFalse(str_contains(json_encode($row, JSON_THROW_ON_ERROR), 'secret123'));
+        $this->assertFalse(str_contains(json_encode($row, JSON_THROW_ON_ERROR), 'S3NT1NEL-xyz'));
         $this->assertTrue(str_contains((string) $row['metadata'], 'a@b.c'));
+    }
+
+    private function stored(): array
+    {
+        return json_decode((string) $this->lastRow()['metadata'], true, 512, JSON_THROW_ON_ERROR);
+    }
+
+    private function rec(array $meta): void
+    {
+        $this->logger->record('obj.event', 1, 'system', null, null, null, $meta);
+    }
+
+    public function testObjectsAreSanitisedToo(): void
+    {
+        $std = new stdClass();
+        $std->password = 'x';
+        $std->name = 'n';
+        $js = new class implements JsonSerializable {
+            public function jsonSerialize(): mixed
+            {
+                return ['Api_Key' => 'k', 'v' => 1];
+            }
+        };
+        $this->rec(['user' => $std, 'list' => [$std, $js], 5 => 'num', 'MiXeD' => ['Secret' => 1, 'a' => 2]]);
+        $this->assertSame([
+            'user' => ['name' => 'n'],
+            'list' => [['name' => 'n'], ['v' => 1]],
+            5 => 'num',
+            'MiXeD' => ['a' => 2],
+        ], $this->stored());
+        $this->assertFalse(str_contains((string) $this->lastRow()['metadata'], '"x"'));
+    }
+
+    public function testClosureMetadataIsUnserializable(): void
+    {
+        $this->rec(['f' => static fn () => 1]);
+        $this->assertSame('{"_unserializable":true}', $this->lastRow()['metadata']);
+    }
+
+    public function testKeyMatchingAvoidsFalsePositives(): void
+    {
+        $kept = ['discard_reason', 'cardinality', 'footprint', 'spot_price', 'pinned', 'sessions'];
+        $dropped = ['card_number', 'cardNumber', 'otp', 'user_otp', 'pin', 'session_id', 'jwt', 'access_token',
+            'PASSWORD', 'new_passwd', 'x-api-key', 'apikey', 'user.pwd'];
+        $meta = [];
+        foreach (array_merge($kept, $dropped) as $k) {
+            $meta[$k] = 1;
+        }
+        $this->rec($meta);
+        $this->assertSame($kept, array_keys($this->stored()));
+    }
+
+    public function testSelfReferencingArrayDoesNotHang(): void
+    {
+        $a = ['x' => 1];
+        $a['self'] = &$a;
+        $t = microtime(true);
+        $this->rec($a);
+        $this->assertTrue(microtime(true) - $t < 2.0);
+        json_decode((string) $this->lastRow()['metadata'], true, 512, JSON_THROW_ON_ERROR);
+        $this->assertTrue(true);
+    }
+
+    public function testDeepNestingIsBounded(): void
+    {
+        $v = 'leaf';
+        for ($i = 0; $i < 1000; $i++) {
+            $v = ['n' => $v];
+        }
+        $this->rec(['deep' => $v]);
+        $this->assertTrue(str_contains((string) $this->lastRow()['metadata'], '[dalam]'));
+        $this->assertFalse(str_contains((string) $this->lastRow()['metadata'], 'leaf'));
+    }
+
+    public function testHugeArrayIsNodeLimited(): void
+    {
+        $t = microtime(true);
+        $this->rec(['big' => range(1, 100000)]);
+        $this->assertTrue(microtime(true) - $t < 2.0);
+        $m = $this->stored();
+        $this->assertTrue(($m['_truncated'] ?? false) === true);
+        $this->assertTrue(count($m['big']) <= 500);
+    }
+
+    public function testListIsolatedAcrossThreeTenantsAndNull(): void
+    {
+        $this->db->execute("INSERT INTO tenants (uuid, name, status, created_at, updated_at) VALUES ('u3', 'T3', 'active', '2026-01-01 00:00:00', '2026-01-01 00:00:00')");
+        foreach ([1, 2, 3, null] as $t) {
+            $this->logger->record('iso.event', $t, 'system', null);
+            $this->logger->record('iso.event', $t, 'system', null);
+        }
+        foreach ([1, 2, 3] as $t) {
+            $p = $this->repo->paginate($t, 1, 50);
+            $this->assertSame(2, $p['total']);
+            foreach ($p['rows'] as $r) {
+                $this->assertSame($t, (int) $r['tenant_id']);
+            }
+        }
+    }
+
+    public function testPaginateSurvivesExtremePages(): void
+    {
+        $this->logger->record('item.created', 1, 'system', null);
+        foreach ([PHP_INT_MAX, 0, -5, PHP_INT_MIN] as $pg) {
+            $p = $this->repo->paginate(1, $pg, 100);
+            $this->assertTrue($p['page'] >= 1 && $p['page'] <= 1000000);
+        }
+        $this->assertSame(1, $this->repo->paginate(1, 0, 10)['page']);
+        $this->assertSame(1, count($this->repo->paginate(1, 1, 10)['rows']));
+    }
+
+    public function testMetadataBoundaryAt8192Bytes(): void
+    {
+        $overhead = strlen('{"b":""}');
+        $this->rec(['b' => str_repeat('x', 8192 - $overhead)]);
+        $this->assertSame(8192, strlen((string) $this->lastRow()['metadata']));
+        $this->rec(['b' => str_repeat('x', 8193 - $overhead)]);
+        $this->assertSame('{"_truncated":true}', $this->lastRow()['metadata']);
+    }
+
+    public function testEntityTypeTooLongRejectedBeforeInsert(): void
+    {
+        $this->assertThrows(InvalidArgumentException::class, fn () => $this->logger->record('a.b', 1, 'system', null, str_repeat('e', 101)));
+        $this->assertSame(0, count($this->db->query('SELECT id FROM audit_logs')));
+    }
+
+    public function testIpAndRequestIdAreTruncated(): void
+    {
+        $l = new AuditLogger($this->repo, static fn (): array => ['ip' => str_repeat('1', 80), 'request_id' => str_repeat('r', 90)]);
+        $l->record('a.b', 1, 'system', null);
+        $this->assertSame(45, strlen($this->lastRow()['ip']));
+        $this->assertSame(64, strlen($this->lastRow()['request_id']));
     }
 }

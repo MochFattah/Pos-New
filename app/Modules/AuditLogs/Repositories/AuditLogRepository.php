@@ -8,6 +8,8 @@ use App\Core\Database\Connection;
 
 final class AuditLogRepository
 {
+    private const MAX_PAGE = 1_000_000;
+
     public function __construct(private readonly Connection $db)
     {
     }
@@ -35,9 +37,10 @@ final class AuditLogRepository
     public function paginate(int $tenantId, int $page, int $perPage): array
     {
         $perPage = max(1, min(100, $perPage));
-        $page = max(1, $page);
+        $page = max(1, min($page, self::MAX_PAGE, intdiv(PHP_INT_MAX, $perPage)));
         $offset = ($page - 1) * $perPage;
 
+        // LIMIT/OFFSET disisipkan langsung karena keduanya int hasil clamp (tanpa input mentah, tanpa overflow ke float).
         $count = $this->db->fetchOne('SELECT COUNT(*) AS c FROM audit_logs WHERE tenant_id = ?', [$tenantId]);
         $rows = $this->db->query(
             'SELECT id, tenant_id, actor_type, actor_id, action, entity_type, entity_id, metadata, ip, request_id, created_at
