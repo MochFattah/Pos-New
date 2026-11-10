@@ -43,6 +43,8 @@ final class RegistrationTest extends TestCase
     private RegisterTenantService $register;
     private VerifyEmailService $verify;
     private RateLimiter $limiter;
+    private RateLimiter $registrationLimiter;
+    private VerificationEmailSender $sender;
     private Session $session;
     private Router $router;
     private UserRepository $users;
@@ -60,7 +62,7 @@ final class RegistrationTest extends TestCase
     {
         $clock = fn (): int => $this->now;
         $audit = new AuditLogger(new AuditLogRepository($this->db), static fn (): array => ['ip' => '127.0.0.1'], $clock);
-        $sender = new VerificationEmailSender(
+        $this->sender = $sender = new VerificationEmailSender(
             new EmailVerificationRepository($this->db),
             new TokenService(),
             $this->mailer,
@@ -89,9 +91,10 @@ final class RegistrationTest extends TestCase
             $clock
         );
         $this->limiter = new RateLimiter($this->db, 3, 900, $clock);
+        $this->registrationLimiter = new RateLimiter($this->db, 3, 900, $clock);
 
         $this->session = new Session(new ArraySessionStorage(), $clock);
-        $controller = new RegisterController($this->register, $this->verify, $this->limiter);
+        $controller = new RegisterController($this->register, $this->verify, $this->limiter, $this->registrationLimiter);
         $this->router = new Router(static fn (string $class): object => $controller);
         $this->router->addGlobalMiddleware(new SessionMiddleware(fn (): Session => $this->session, 28800, $clock));
         $this->router->addGlobalMiddleware(new CsrfMiddleware());
@@ -396,13 +399,79 @@ final class RegistrationTest extends TestCase
         $this->assertSame(0, $this->count('tenants'));
     }
 
-    public function testRegisterPostIsRateLimitedPerIp(): void
+    public function testValidationFailuresDoNotCountTowardRegistrationLimit(): void
     {
-        $codes = [];
-        for ($i = 0; $i < 4; $i++) {
-            $codes[] = $this->post('/daftar', $this->input(['email' => 'bukan-email']))->status();
+        for ($i = 0; $i < 6; $i++) {
+            $this->assertSame(422, $this->post('/daftar', $this->input(['email' => 'bukan-email']))->status());
         }
-        $this->assertSame([422, 422, 422, 429], $codes);
+        $this->assertSame(302, $this->post('/daftar', $this->input())->status());
+    }
+
+    public function testRegisterPostIsRateLimitedPerIpAfterValidAttempts(): void
+    {
+        $codes = [$this->post('/daftar', $this->input())->status()];
+        for ($i = 0; $i < 3; $i++) {
+            $codes[] = $this->post('/daftar', $this->input())->status();
+        }
+        $this->assertSame([302, 422, 422, 429], $codes);
+        $this->assertSame(1, $this->count('tenants'));
+    }
+
+    public function testRegistrationLimitIsIndependentFromResendLimit(): void
+    {
+        for ($i = 0; $i < 3; $i++) {
+            $this->post('/verifikasi-email/kirim-ulang', ['email' => "r$i@example.com"]);
+        }
+        $this->assertSame(429, $this->post('/verifikasi-email/kirim-ulang', ['email' => 'r9@example.com'])->status());
+        $this->assertSame(302, $this->post('/daftar', $this->input())->status());
+    }
+
+    public function testRegistrationLimitConfigExists(): void
+    {
+        $cfg = require dirname(__DIR__, 3) . '/config/security.php';
+        $this->assertTrue($cfg['registration']['max_attempts'] > $cfg['login']['max_attempts']);
+        $this->assertTrue($cfg['registration']['window_seconds'] > 0);
+    }
+
+    public function testPasswordLimitIsSeventyTwoBytesOnRegister(): void
+    {
+        $ok = str_repeat('a', 72);
+        $this->assertSame(302, $this->post('/daftar', $this->input(['password' => $ok, 'password_confirmation' => $ok]))->status());
+        $multi = str_repeat('é', 37);
+        $res = $this->post('/daftar', $this->input(['email' => 'lain@example.com', 'password' => $multi, 'password_confirmation' => $multi]));
+        $this->assertSame(422, $res->status());
+        $this->assertContains('maksimal 72 byte', $res->body());
+        $edge = str_repeat('é', 36);
+        $this->assertSame(302, $this->post('/daftar', $this->input(['email' => 'tiga@example.com', 'password' => $edge, 'password_confirmation' => $edge]))->status());
+    }
+
+    public function testOptionalFieldsAreNotMarkedRequiredInMarkup(): void
+    {
+        $html = $this->router->dispatch(Request::create('GET', '/daftar'))->body();
+        foreach (['business_type', 'address'] as $id) {
+            preg_match('/<input\b[^>]*\bid="' . $id . '"[^>]*>/', $html, $m);
+            $this->assertFalse(str_contains($m[0], 'required'), $id);
+        }
+        foreach (['owner_name', 'email', 'phone', 'business_name', 'password', 'password_confirmation'] as $id) {
+            preg_match('/<input\b[^>]*\bid="' . $id . '"[^>]*>/', $html, $m);
+            $this->assertContains(' required', $m[0], $id);
+        }
+    }
+
+    public function testRegisterViewEscapesRepopulatedValues(): void
+    {
+        $res = $this->post('/daftar', $this->input([
+            'owner_name' => '"><script>alert(1)</script>',
+            'address' => "' onfocus='alert(2)",
+            'email' => 'bukan-email',
+        ]));
+        $this->assertSame(422, $res->status());
+        $body = $res->body();
+        $this->assertFalse(str_contains($body, '<script>'));
+        $this->assertFalse(str_contains($body, '"><'));
+        $this->assertContains('value="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"', $body);
+        $this->assertFalse(str_contains($body, "value=''"));
+        $this->assertContains('&#039; onfocus=&#039;alert(2)', $body);
     }
 
     public function testMailerFailureOnRegisterShowsFriendlyErrorAndStoresNothing(): void
@@ -456,5 +525,153 @@ final class RegistrationTest extends TestCase
             $this->assertContains('<label for="' . $id . '">', $html);
         }
         $this->assertContains('name="_csrf"', $html);
+    }
+
+    /** @return array{tenantId: int, userId: int, token: string} */
+    private function invitedUser(int $tenantId): array
+    {
+        $now = gmdate('Y-m-d H:i:s', $this->now);
+        $id = $this->users->create($tenantId, 'Sari', 'sari@example.com', null, (new PasswordHasher())->hash('placeholder-xyz'), false, 'pending_verification', $now);
+        $this->sender->send($id, 'sari@example.com', 'Sari');
+        return ['tenantId' => $tenantId, 'userId' => $id, 'token' => $this->mailer->lastToken()];
+    }
+
+    public function testVerifyAndSetPasswordActivatesInvitedUserWithoutDemo(): void
+    {
+        $r = $this->registerDefault();
+        $inv = $this->invitedUser($r['tenantId']);
+        $this->now += 30;
+        $this->assertTrue($this->verify->verifyAndSetPassword($inv['token'], 'sandi-baru-123'));
+        $user = $this->db->fetchOne('SELECT * FROM users WHERE id = ?', [$inv['userId']]);
+        $this->assertSame('active', $user['status']);
+        $this->assertTrue(password_verify('sandi-baru-123', $user['password_hash']));
+        $this->assertSame(gmdate('Y-m-d H:i:s', $this->now), $user['email_verified_at']);
+        $this->assertSame(0, $this->count('tenant_demos'));
+        $this->assertSame('pending_verification', $this->db->fetchOne('SELECT status FROM tenants WHERE id = ?', [$r['tenantId']])['status']);
+        $this->assertSame('pending_verification', $this->db->fetchOne('SELECT status FROM users WHERE id = ?', [$r['userId']])['status']);
+        $this->assertFalse($this->verify->verifyAndSetPassword($inv['token'], 'sandi-baru-123'));
+    }
+
+    public function testVerifyAndSetPasswordRejectsOwnerTokenWithoutSideEffects(): void
+    {
+        $this->registerDefault();
+        $before = $this->snapshot();
+        $this->assertFalse($this->verify->verifyAndSetPassword($this->mailer->lastToken(), 'sandi-baru-123'));
+        $this->assertSame($before, $this->snapshot());
+    }
+
+    public function testVerifyRejectsNonOwnerInvitationTokenWithoutSideEffects(): void
+    {
+        $r = $this->registerDefault();
+        $inv = $this->invitedUser($r['tenantId']);
+        $before = $this->snapshot();
+        $this->assertFalse($this->verify->verify($inv['token']));
+        $this->assertSame($before, $this->snapshot());
+        $this->assertSame(0, $this->count('tenant_demos'));
+    }
+
+    public function testVerifyAndSetPasswordInvalidExpiredUsedAndPolicy(): void
+    {
+        $r = $this->registerDefault();
+        $inv = $this->invitedUser($r['tenantId']);
+        $before = $this->snapshot();
+        $this->assertFalse($this->verify->verifyAndSetPassword(bin2hex(random_bytes(32)), 'sandi-baru-123'));
+        $this->assertFalse($this->verify->verifyAndSetPassword('bukan-token', 'sandi-baru-123'));
+        $this->assertFalse($this->verify->verifyAndSetPassword($inv['token'], 'pendek'));
+        $this->assertFalse($this->verify->verifyAndSetPassword($inv['token'], str_repeat('a', 73)));
+        $this->assertFalse($this->verify->verifyAndSetPassword($inv['token'], str_repeat('é', 37)));
+        $this->assertSame($before, $this->snapshot());
+        $this->assertSame(null, $this->db->fetchOne('SELECT used_at FROM email_verifications WHERE user_id = ?', [$inv['userId']])['used_at']);
+
+        $this->now += 86400 + 1;
+        $this->assertFalse($this->verify->verifyAndSetPassword($inv['token'], 'sandi-baru-123'));
+        $this->now -= 86400 + 1;
+        $this->assertTrue($this->verify->verifyAndSetPassword($inv['token'], str_repeat('a', 72)));
+        $this->assertFalse($this->verify->verifyAndSetPassword($inv['token'], 'sandi-baru-123'));
+    }
+
+    public function testResendForNonOwnerPendingUserSendsNothing(): void
+    {
+        $r = $this->registerDefault();
+        $this->invitedUser($r['tenantId']);
+        $sent = count($this->mailer->sent);
+        $this->verify->resend('sari@example.com', '127.0.0.1');
+        $this->assertSame($sent, count($this->mailer->sent));
+        $this->assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) AS n FROM audit_logs WHERE action = 'auth.verification_resent'")['n']);
+    }
+
+    public function testOwnerCannotLoginStateBypassVerificationViaPasswordFlow(): void
+    {
+        $r = $this->registerDefault();
+        $this->assertFalse($this->verify->verifyAndSetPassword($this->mailer->lastToken(), 'sandi-baru-123'));
+        $this->assertSame('pending_verification', $this->db->fetchOne('SELECT status FROM users WHERE id = ?', [$r['userId']])['status']);
+        $this->assertTrue(password_verify('rahasia-banget', $this->db->fetchOne('SELECT password_hash FROM users WHERE id = ?', [$r['userId']])['password_hash']));
+    }
+
+    public function testResendWithFailingMailerStaysNeutralAndKeepsOldTokenValid(): void
+    {
+        $this->registerDefault();
+        $old = $this->mailer->lastToken();
+        $this->mailer->fail = true;
+        $res = $this->post('/verifikasi-email/kirim-ulang', ['email' => 'budi@example.com']);
+        $this->assertSame(200, $res->status());
+        $neutral = $this->post('/verifikasi-email/kirim-ulang', ['email' => 'nobody@example.com']);
+        $this->assertSame(200, $neutral->status());
+        $this->assertContains('Jika email terdaftar dan belum terverifikasi', $res->body());
+        $this->assertFalse(str_contains($res->body(), 'SMTP down'));
+        $this->assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) AS n FROM audit_logs WHERE action = 'auth.verification_resent'")['n']);
+        $this->mailer->fail = false;
+        $this->assertTrue($this->verify->verify($old));
+    }
+
+    public function testResendIpCapAppliesAcrossDifferentEmails(): void
+    {
+        $codes = [];
+        foreach (['a', 'b', 'c', 'd'] as $n) {
+            $codes[] = $this->post('/verifikasi-email/kirim-ulang', ['email' => "$n@example.com"])->status();
+        }
+        $this->assertSame([200, 200, 200, 429], $codes);
+    }
+
+    public function testVerifyDoesNotStartDemoWhenTenantIsNotPending(): void
+    {
+        $r = $this->registerDefault();
+        $this->db->execute("UPDATE tenants SET status = 'suspended' WHERE id = ?", [$r['tenantId']]);
+        $this->assertTrue($this->verify->verify($this->mailer->lastToken()));
+        $this->assertSame(0, $this->count('tenant_demos'));
+        $this->assertSame('suspended', $this->db->fetchOne('SELECT status FROM tenants WHERE id = ?', [$r['tenantId']])['status']);
+    }
+
+    public function testEmailBodyStripsControlCharactersFromOwnerName(): void
+    {
+        $this->registerDefault(['owner_name' => "Budi\r\n\r\nKlik http://evil.test\x07 sekarang"]);
+        $body = $this->mailer->sent[0]['body'];
+        $this->assertTrue(str_starts_with($body, "Halo Budi Klik http://evil.test sekarang,\n\n"));
+        $this->assertFalse(str_contains($body, "\r"));
+        $this->assertFalse(str_contains($body, "\x07"));
+    }
+
+    public function testProductionRequiresPublicAppUrlAtLinkBuildTime(): void
+    {
+        $make = fn (string $url, bool $prod): VerificationEmailSender => new VerificationEmailSender(
+            new EmailVerificationRepository($this->db),
+            new TokenService(),
+            $this->mailer,
+            $url,
+            86400,
+            fn (): int => $this->now,
+            $prod
+        );
+        $r = $this->registerDefault();
+        $sent = count($this->mailer->sent);
+        $tokens = $this->count('email_verifications');
+        foreach (['', 'http://localhost:8000', 'http://127.0.0.1'] as $bad) {
+            $this->assertThrows(\RuntimeException::class, fn () => $make($bad, true)->send($r['userId'], 'budi@example.com', 'Budi'));
+        }
+        $this->assertSame($sent, count($this->mailer->sent));
+        $this->assertSame($tokens, $this->count('email_verifications'));
+        $make('http://localhost:8000', false)->send($r['userId'], 'budi@example.com', 'Budi');
+        $make('https://pos.example.test', true)->send($r['userId'], 'budi@example.com', 'Budi');
+        $this->assertSame($sent + 2, count($this->mailer->sent));
     }
 }

@@ -6,14 +6,14 @@
  * @var array<string, string> $old
  */
 $fields = [
-    ['owner_name', 'Nama pemilik', 'text', 'name'],
-    ['email', 'Email', 'email', 'email'],
-    ['phone', 'Nomor telepon', 'tel', 'tel'],
-    ['business_name', 'Nama usaha', 'text', 'organization'],
-    ['business_type', 'Jenis usaha', 'text', 'off'],
-    ['address', 'Alamat usaha', 'text', 'street-address'],
-    ['password', 'Kata sandi', 'password', 'new-password'],
-    ['password_confirmation', 'Konfirmasi kata sandi', 'password', 'new-password'],
+    ['owner_name', 'Nama pemilik', 'text', 'name', true],
+    ['email', 'Email', 'email', 'email', true],
+    ['phone', 'Nomor telepon', 'tel', 'tel', true],
+    ['business_name', 'Nama usaha', 'text', 'organization', true],
+    ['business_type', 'Jenis usaha', 'text', 'off', false],
+    ['address', 'Alamat usaha', 'text', 'street-address', false],
+    ['password', 'Kata sandi', 'password', 'new-password', true],
+    ['password_confirmation', 'Konfirmasi kata sandi', 'password', 'new-password', true],
 ];
 ?>
 <h1>Daftar akun usaha</h1>
@@ -22,10 +22,10 @@ $fields = [
 <?php endif; ?>
 <form method="post" action="/daftar" novalidate>
 <input type="hidden" name="_csrf" value="<?= $this->e($csrf) ?>">
-<?php foreach ($fields as [$name, $label, $type, $autocomplete]): ?>
+<?php foreach ($fields as [$name, $label, $type, $autocomplete, $required]): ?>
 <p>
 <label for="<?= $this->e($name) ?>"><?= $this->e($label) ?></label><br>
-<input id="<?= $this->e($name) ?>" name="<?= $this->e($name) ?>" type="<?= $this->e($type) ?>" autocomplete="<?= $this->e($autocomplete) ?>" required<?php if ($type !== 'password'): ?> value="<?= $this->e($old[$name] ?? '') ?>"<?php endif; ?><?php if (isset($errors[$name])): ?> aria-invalid="true" aria-describedby="<?= $this->e($name) ?>-error"<?php endif; ?>>
+<input id="<?= $this->e($name) ?>" name="<?= $this->e($name) ?>" type="<?= $this->e($type) ?>" autocomplete="<?= $this->e($autocomplete) ?>"<?= $required ? ' required' : '' ?><?php if ($type !== 'password'): ?> value="<?= $this->e($old[$name] ?? '') ?>"<?php endif; ?><?php if (isset($errors[$name])): ?> aria-invalid="true" aria-describedby="<?= $this->e($name) ?>-error"<?php endif; ?>>
 <?php if (isset($errors[$name])): ?>
 <br><span id="<?= $this->e($name) ?>-error"><?= $this->e($errors[$name]) ?></span>
 <?php endif; ?>

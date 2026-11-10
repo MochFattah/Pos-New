@@ -79,17 +79,25 @@ $buildRegisterController = static function () use ($buildAuditLogger, $sharedDb)
         new TokenService(),
         MailerFactory::fromConfig(),
         (string) Config::get('app.url', ''),
-        (int) Config::get('security.verification_token.ttl_seconds', 86400)
+        (int) Config::get('security.verification_token.ttl_seconds', 86400),
+        null,
+        Config::get('app.env', 'production') === 'production'
     );
     $limiter = new RateLimiter(
         $db,
         (int) Config::get('security.login.max_attempts', 5),
         (int) Config::get('security.login.window_seconds', 900)
     );
+    $registrationLimiter = new RateLimiter(
+        $db,
+        (int) Config::get('security.registration.max_attempts', 20),
+        (int) Config::get('security.registration.window_seconds', 3600)
+    );
     return new RegisterController(
         new RegisterTenantService($db, $tenants, $users, new RoleRepository($db), $sender, new PasswordHasher(), $audit),
         new VerifyEmailService($db, $verifications, $users, $tenants, new DemoService($db), $sender, $audit),
-        $limiter
+        $limiter,
+        $registrationLimiter
     );
 };
 

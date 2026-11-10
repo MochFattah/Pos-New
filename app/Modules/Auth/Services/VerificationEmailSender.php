@@ -22,12 +22,15 @@ final class VerificationEmailSender
         private readonly string $appUrl,
         private readonly int $ttlSeconds,
         ?callable $clock = null,
+        private readonly bool $requirePublicUrl = false,
     ) {
         $this->clock = $clock !== null ? Closure::fromCallable($clock) : static fn (): int => time();
     }
 
     public function send(int $userId, string $email, string $name): void
     {
+        $this->assertPublicUrl();
+        $name = trim((string) preg_replace('/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\s]+/u', ' ', $name));
         $now = ($this->clock)();
         $token = $this->tokens->generate();
         $this->repository->create(
@@ -44,5 +47,16 @@ final class VerificationEmailSender
             . "Tautan berlaku selama {$hours} jam dan hanya dapat dipakai sekali.\n"
             . "Jika Anda tidak merasa mendaftar, abaikan email ini.\n";
         $this->mailer->send($email, 'Verifikasi email akun POS Retail', $body);
+    }
+
+    private function assertPublicUrl(): void
+    {
+        if (!$this->requirePublicUrl) {
+            return;
+        }
+        $host = strtolower((string) parse_url($this->appUrl, PHP_URL_HOST));
+        if ($host === '' || $host === 'localhost' || $host === '127.0.0.1' || $host === '[::1]' || str_ends_with($host, '.localhost')) {
+            throw new \RuntimeException('APP_URL belum diatur ke alamat publik; tautan verifikasi tidak dapat dibuat di production.');
+        }
     }
 }

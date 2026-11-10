@@ -9,6 +9,11 @@ return [
         'max_attempts' => 5,
         'window_seconds' => 900,
     ],
+    // Registrasi: lebih longgar dari login; hanya percobaan yang lolos validasi dihitung.
+    'registration' => [
+        'max_attempts' => (int) Env::get('REGISTRATION_MAX_ATTEMPTS', '20'),
+        'window_seconds' => (int) Env::get('REGISTRATION_WINDOW_SECONDS', '3600'),
+    ],
     'reset_token' => ['ttl_seconds' => 3600],
     'verification_token' => ['ttl_seconds' => 86400],
     'session' => [

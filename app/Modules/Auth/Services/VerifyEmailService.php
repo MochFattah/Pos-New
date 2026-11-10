@@ -18,6 +18,7 @@ use Closure;
 final class VerifyEmailService
 {
     private const MIN_PASSWORD_LENGTH = 8;
+    private const MAX_PASSWORD_BYTES = 72;
 
     private Closure $clock;
     private TokenService $tokens;
@@ -50,7 +51,7 @@ final class VerifyEmailService
     /** Penerimaan undangan pengguna non-Owner: aktifkan akun sekaligus menetapkan kata sandi. */
     public function verifyAndSetPassword(string $plainToken, string $newPassword): bool
     {
-        if (mb_strlen($newPassword) < self::MIN_PASSWORD_LENGTH) {
+        if (mb_strlen($newPassword) < self::MIN_PASSWORD_LENGTH || strlen($newPassword) > self::MAX_PASSWORD_BYTES) {
             return false;
         }
         return $this->consume($plainToken, false, $newPassword);
@@ -105,8 +106,9 @@ final class VerifyEmailService
                 return false;
             }
             if ($owner) {
-                $this->tenants->activateIfPending($tenantId, $now);
-                $this->demo->startFor($tenantId, 'registration');
+                if ($this->tenants->activateIfPending($tenantId, $now)) {
+                    $this->demo->startFor($tenantId, 'registration');
+                }
             }
             $this->audit->record(
                 'auth.email_verified',

@@ -26,6 +26,7 @@ final class RegisterController
         private readonly RegisterTenantService $register,
         private readonly VerifyEmailService $verify,
         private readonly RateLimiter $limiter,
+        private readonly RateLimiter $registrationLimiter,
     ) {
     }
 
@@ -37,10 +38,9 @@ final class RegisterController
     public function submit(Request $request): Response
     {
         $ip = $request->ip();
-        if ($this->limiter->tooManyAttempts('register', $ip)) {
+        if ($this->registrationLimiter->tooManyAttempts('register', $ip)) {
             return $this->notice('Terlalu banyak percobaan', self::TOO_MANY, 429);
         }
-        $this->limiter->record('register', $ip, false);
 
         $data = $request->all();
         $result = Validator::make($data, [
@@ -50,7 +50,7 @@ final class RegisterController
             'business_name' => 'required|max:150',
             'business_type' => 'max:100',
             'address' => 'max:500',
-            'password' => 'required|min:8|max:72|confirmed',
+            'password' => 'required|min:8|maxbytes:72|confirmed',
             'password_confirmation' => 'required',
         ], [
             'owner_name' => 'nama pemilik',
@@ -66,6 +66,7 @@ final class RegisterController
         if ($result->fails()) {
             return $this->form($request, $result->errors(), $old, 422);
         }
+        $this->registrationLimiter->record('register', $ip, false);
 
         try {
             $this->register->register($result->validated());
