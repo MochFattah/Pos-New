@@ -8,6 +8,13 @@ return [
     'login' => [
         'max_attempts' => 5,
         'window_seconds' => 900,
+        // Agregat per IP (semua email) untuk menahan password spraying.
+        'ip_max_attempts' => (int) Env::get('LOGIN_IP_MAX_ATTEMPTS', '50'),
+    ],
+    // Permintaan tautan reset: per (email, IP) dan per IP.
+    'reset_request' => [
+        'max_attempts' => (int) Env::get('RESET_REQUEST_MAX_ATTEMPTS', '5'),
+        'window_seconds' => (int) Env::get('RESET_REQUEST_WINDOW_SECONDS', '3600'),
     ],
     // Registrasi: lebih longgar dari login; hanya percobaan yang lolos validasi dihitung.
     'registration' => [

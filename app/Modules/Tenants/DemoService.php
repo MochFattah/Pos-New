@@ -43,4 +43,14 @@ final class DemoService
             ]
         );
     }
+
+    /** Ada jendela demo yang berlaku: starts_at <= sekarang < ends_at. Data tidak pernah dihapus saat berakhir. */
+    public function isActive(int $tenantId): bool
+    {
+        $now = gmdate('Y-m-d H:i:s', ($this->clock)());
+        return $this->db->fetchOne(
+            'SELECT id FROM tenant_demos WHERE tenant_id = ? AND starts_at <= ? AND ends_at > ? LIMIT 1',
+            [$tenantId, $now, $now]
+        ) !== null;
+    }
 }

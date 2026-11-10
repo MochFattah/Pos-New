@@ -71,6 +71,20 @@ class UserRepository
         ) === 1;
     }
 
+    /** Mengganti password (hanya pengguna aktif). Hash baru sekaligus mencabut semua sesi lama (sidik jari di sesi). */
+    public function updatePassword(int $userId, string $passwordHash, string $now): bool
+    {
+        return $this->db->execute(
+            "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ? AND status = 'active'",
+            [$passwordHash, $now, $userId]
+        ) === 1;
+    }
+
+    public function touchLastLogin(int $userId, string $now): void
+    {
+        $this->db->execute('UPDATE users SET last_login_at = ? WHERE id = ?', [$now, $userId]);
+    }
+
     private static function isDuplicateEmail(PDOException $e): bool
     {
         $state = (string) ($e->errorInfo[0] ?? $e->getCode());

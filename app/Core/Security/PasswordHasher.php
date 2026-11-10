@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Core\Security;
 
-final class PasswordHasher
+class PasswordHasher
 {
     public function hash(string $password): string
     {

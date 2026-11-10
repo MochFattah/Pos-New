@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Core\Application;
 use App\Core\Config;
 use App\Core\Env;
+use App\Core\Middleware\AccessGateMiddleware;
+use App\Core\Middleware\AuthMiddleware;
 use App\Core\Middleware\CsrfMiddleware;
 use App\Core\Middleware\SecurityHeadersMiddleware;
 use App\Core\Middleware\SessionMiddleware;
@@ -19,7 +21,13 @@ use App\Core\Mail\MailerFactory;
 use App\Core\Security\PasswordHasher;
 use App\Core\Security\RateLimiter;
 use App\Core\Security\TokenService;
+use App\Modules\Auth\Controllers\HomeController;
+use App\Modules\Auth\Controllers\LoginController;
+use App\Modules\Auth\Controllers\PasswordResetController;
 use App\Modules\Auth\Controllers\RegisterController;
+use App\Modules\Auth\Repositories\PasswordResetRepository;
+use App\Modules\Auth\Services\AuthService;
+use App\Modules\Auth\Services\PasswordResetService;
 use App\Modules\Auth\Repositories\EmailVerificationRepository;
 use App\Modules\Auth\Services\VerificationEmailSender;
 use App\Modules\Auth\Services\VerifyEmailService;
@@ -101,10 +109,53 @@ $buildRegisterController = static function () use ($buildAuditLogger, $sharedDb)
     );
 };
 
-$buildRouter = static function () use ($basePath, $buildGlobalMiddleware, $buildRegisterController): Router {
+$buildAuthService = static function () use ($buildAuditLogger, $sharedDb): AuthService {
+    $db = $sharedDb();
+    $window = (int) Config::get('security.login.window_seconds', 900);
+    return new AuthService(
+        $db,
+        new UserRepository($db),
+        new RateLimiter($db, (int) Config::get('security.login.max_attempts', 5), $window),
+        new RateLimiter($db, (int) Config::get('security.login.ip_max_attempts', 50), $window),
+        new PasswordHasher(),
+        $buildAuditLogger($db)
+    );
+};
+
+$buildPasswordResetController = static function () use ($buildAuditLogger, $sharedDb): PasswordResetController {
+    $db = $sharedDb();
+    $ttl = (int) Config::get('security.reset_token.ttl_seconds', 3600);
+    return new PasswordResetController(
+        new PasswordResetService(
+            $db,
+            new PasswordResetRepository($db),
+            new UserRepository($db),
+            new TokenService(),
+            new PasswordHasher(),
+            MailerFactory::fromConfig(),
+            $buildAuditLogger($db),
+            (string) Config::get('app.url', ''),
+            $ttl,
+            null,
+            Config::get('app.env', 'production') === 'production'
+        ),
+        new RateLimiter(
+            $db,
+            (int) Config::get('security.reset_request.max_attempts', 5),
+            (int) Config::get('security.reset_request.window_seconds', 3600)
+        )
+    );
+};
+
+$buildRouter = static function () use ($basePath, $buildGlobalMiddleware, $buildRegisterController, $buildAuthService, $buildPasswordResetController, $sharedDb): Router {
     // Resolver: controller yang butuh layanan dirakit lewat builder-nya; sisanya dibuat tanpa argumen.
     $router = new Router(static fn (string $class): object => match ($class) {
         RegisterController::class => $buildRegisterController(),
+        LoginController::class => new LoginController($buildAuthService()),
+        PasswordResetController::class => $buildPasswordResetController(),
+        HomeController::class => new HomeController(new DemoService($sharedDb()), (string) Config::get('app.support_email', '')),
+        AuthMiddleware::class => new AuthMiddleware($buildAuthService()),
+        AccessGateMiddleware::class => new AccessGateMiddleware(new DemoService($sharedDb())),
         default => new $class(),
     });
     foreach ($buildGlobalMiddleware() as $middleware) {
