@@ -115,16 +115,24 @@ abstract class AuthHarness extends TestCase
         $gate = new AccessGateMiddleware($demo);
 
         $this->session = new Session($this->storage = new ArraySessionStorage(), $clock);
-        $this->router = new Router(static fn (string $class): object => match ($class) {
+        $services = [
             LoginController::class => $login,
             PasswordResetController::class => $reset,
             HomeController::class => $home,
             AuthMiddleware::class => $authMw,
             AccessGateMiddleware::class => $gate,
-        });
+        ] + $this->extraServices();
+        $this->router = new Router(static fn (string $class): object => $services[$class]
+            ?? throw new \LogicException('Layanan tidak terdaftar di harness: ' . $class));
         $this->router->addGlobalMiddleware(new SessionMiddleware(fn (): Session => $this->session, 28800, $clock));
         $this->router->addGlobalMiddleware(new CsrfMiddleware());
         (require dirname(__DIR__, 2) . '/routes/web.php')($this->router);
+    }
+
+    /** Hook untuk harness turunan: controller/middleware tambahan untuk resolver router. @return array<class-string, object> */
+    protected function extraServices(): array
+    {
+        return [];
     }
 
     /** Registrasi + verifikasi email: pengguna Owner aktif, demo berjalan. @return array{tenantId: int, userId: int} */

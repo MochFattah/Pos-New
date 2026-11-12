@@ -7,7 +7,9 @@ use App\Core\Config;
 use App\Core\Env;
 use App\Core\Middleware\AccessGateMiddleware;
 use App\Core\Middleware\AuthMiddleware;
+use App\Core\Authorization\PolicyService;
 use App\Core\Middleware\CsrfMiddleware;
+use App\Core\Middleware\PermissionMiddleware;
 use App\Core\Middleware\SecurityHeadersMiddleware;
 use App\Core\Middleware\SessionMiddleware;
 use App\Core\RequestContext;
@@ -22,6 +24,9 @@ use App\Core\Security\PasswordHasher;
 use App\Core\Security\RateLimiter;
 use App\Core\Security\TokenService;
 use App\Modules\Auth\Controllers\HomeController;
+use App\Modules\Branches\Controllers\BranchController;
+use App\Modules\Branches\Repositories\BranchRepository;
+use App\Modules\Branches\Services\BranchService;
 use App\Modules\Auth\Controllers\LoginController;
 use App\Modules\Auth\Controllers\PasswordResetController;
 use App\Modules\Auth\Controllers\RegisterController;
@@ -160,12 +165,20 @@ $buildPasswordResetController = static function () use ($buildAuditLogger, $shar
     );
 };
 
-$buildRouter = static function () use ($basePath, $buildGlobalMiddleware, $buildRegisterController, $buildAuthService, $buildPasswordResetController, $sharedDb): Router {
+$buildBranchController = static function () use ($buildAuditLogger, $sharedDb): BranchController {
+    $db = $sharedDb();
+    $policy = new PolicyService($db);
+    return new BranchController(new BranchService($db, new BranchRepository($db), $policy, $buildAuditLogger($db)), $policy);
+};
+
+$buildRouter = static function () use ($basePath, $buildGlobalMiddleware, $buildRegisterController, $buildAuthService, $buildPasswordResetController, $buildBranchController, $sharedDb): Router {
+    PermissionMiddleware::provide(static fn (): PolicyService => new PolicyService($sharedDb()));
     // Resolver: controller yang butuh layanan dirakit lewat builder-nya; sisanya dibuat tanpa argumen.
     $router = new Router(static fn (string $class): object => match ($class) {
         RegisterController::class => $buildRegisterController(),
         LoginController::class => new LoginController($buildAuthService()),
         PasswordResetController::class => $buildPasswordResetController(),
+        BranchController::class => $buildBranchController(),
         HomeController::class => new HomeController(new DemoService($sharedDb()), (string) Config::get('app.support_email', '')),
         AuthMiddleware::class => new AuthMiddleware($buildAuthService()),
         AccessGateMiddleware::class => new AccessGateMiddleware(new DemoService($sharedDb())),
