@@ -80,6 +80,6 @@ final class LoginController
             'error' => $error,
             'notice' => $notice,
             'offerResend' => $offerResend,
-        ]), $status);
+        ]), $status)->sensitive();
     }
 }

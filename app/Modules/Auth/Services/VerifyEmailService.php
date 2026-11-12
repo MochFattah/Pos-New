@@ -51,7 +51,7 @@ final class VerifyEmailService
     /** Penerimaan undangan pengguna non-Owner: aktifkan akun sekaligus menetapkan kata sandi. */
     public function verifyAndSetPassword(string $plainToken, string $newPassword): bool
     {
-        if (mb_strlen($newPassword) < self::MIN_PASSWORD_LENGTH || strlen($newPassword) > self::MAX_PASSWORD_BYTES) {
+        if (mb_strlen($newPassword) < self::MIN_PASSWORD_LENGTH || strlen($newPassword) > self::MAX_PASSWORD_BYTES || str_contains($newPassword, "\0")) {
             return false;
         }
         return $this->consume($plainToken, false, $newPassword);

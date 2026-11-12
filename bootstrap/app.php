@@ -76,7 +76,14 @@ $sharedDb = static function (): Connection {
     return $db ??= Connection::fromConfig();
 };
 
-$buildRegisterController = static function () use ($buildAuditLogger, $sharedDb): RegisterController {
+/** Retensi login_attempts = jendela terbesar di antara semua limiter yang berbagi tabel itu. */
+$limiterRetention = static fn (): int => max(
+    (int) Config::get('security.login.window_seconds', 900),
+    (int) Config::get('security.reset_request.window_seconds', 3600),
+    (int) Config::get('security.registration.window_seconds', 3600)
+);
+
+$buildRegisterController = static function () use ($buildAuditLogger, $sharedDb, $limiterRetention): RegisterController {
     $db = $sharedDb();
     $audit = $buildAuditLogger($db);
     $verifications = new EmailVerificationRepository($db);
@@ -94,12 +101,16 @@ $buildRegisterController = static function () use ($buildAuditLogger, $sharedDb)
     $limiter = new RateLimiter(
         $db,
         (int) Config::get('security.login.max_attempts', 5),
-        (int) Config::get('security.login.window_seconds', 900)
+        (int) Config::get('security.login.window_seconds', 900),
+        null,
+        $limiterRetention()
     );
     $registrationLimiter = new RateLimiter(
         $db,
         (int) Config::get('security.registration.max_attempts', 20),
-        (int) Config::get('security.registration.window_seconds', 3600)
+        (int) Config::get('security.registration.window_seconds', 3600),
+        null,
+        $limiterRetention()
     );
     return new RegisterController(
         new RegisterTenantService($db, $tenants, $users, new RoleRepository($db), $sender, new PasswordHasher(), $audit),
@@ -109,20 +120,20 @@ $buildRegisterController = static function () use ($buildAuditLogger, $sharedDb)
     );
 };
 
-$buildAuthService = static function () use ($buildAuditLogger, $sharedDb): AuthService {
+$buildAuthService = static function () use ($buildAuditLogger, $sharedDb, $limiterRetention): AuthService {
     $db = $sharedDb();
     $window = (int) Config::get('security.login.window_seconds', 900);
     return new AuthService(
         $db,
         new UserRepository($db),
-        new RateLimiter($db, (int) Config::get('security.login.max_attempts', 5), $window),
-        new RateLimiter($db, (int) Config::get('security.login.ip_max_attempts', 50), $window),
+        new RateLimiter($db, (int) Config::get('security.login.max_attempts', 5), $window, null, $limiterRetention()),
+        new RateLimiter($db, (int) Config::get('security.login.ip_max_attempts', 50), $window, null, $limiterRetention()),
         new PasswordHasher(),
         $buildAuditLogger($db)
     );
 };
 
-$buildPasswordResetController = static function () use ($buildAuditLogger, $sharedDb): PasswordResetController {
+$buildPasswordResetController = static function () use ($buildAuditLogger, $sharedDb, $limiterRetention): PasswordResetController {
     $db = $sharedDb();
     $ttl = (int) Config::get('security.reset_token.ttl_seconds', 3600);
     return new PasswordResetController(
@@ -142,7 +153,9 @@ $buildPasswordResetController = static function () use ($buildAuditLogger, $shar
         new RateLimiter(
             $db,
             (int) Config::get('security.reset_request.max_attempts', 5),
-            (int) Config::get('security.reset_request.window_seconds', 3600)
+            (int) Config::get('security.reset_request.window_seconds', 3600),
+            null,
+            $limiterRetention()
         )
     );
 };

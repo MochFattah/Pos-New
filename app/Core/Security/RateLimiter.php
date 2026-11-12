@@ -10,6 +10,7 @@ use Closure;
 final class RateLimiter
 {
     private Closure $clock;
+    private readonly int $retentionSeconds;
 
     /** @param (callable(): int)|null $clock */
     public function __construct(
@@ -17,7 +18,12 @@ final class RateLimiter
         private readonly int $maxAttempts,
         private readonly int $windowSeconds,
         ?callable $clock = null,
+        ?int $retentionSeconds = null,
     ) {
+        // Tabel login_attempts dipakai bersama beberapa limiter dengan jendela berbeda. Penghapusan
+        // memakai retensi terbesar yang dikonfigurasi (bukan jendela milik limiter ini), agar satu
+        // kegagalan login tidak menghapus baris reset/registrasi yang jendelanya lebih panjang.
+        $this->retentionSeconds = max($windowSeconds, $retentionSeconds ?? $windowSeconds);
         $this->clock = $clock !== null ? Closure::fromCallable($clock) : static fn (): int => time();
     }
 
@@ -37,7 +43,7 @@ final class RateLimiter
         $now = ($this->clock)();
         $this->db->execute(
             'DELETE FROM login_attempts WHERE attempted_at < ?',
-            [gmdate('Y-m-d H:i:s', $now - $this->windowSeconds)]
+            [gmdate('Y-m-d H:i:s', $now - $this->retentionSeconds)]
         );
         $this->db->execute(
             'INSERT INTO login_attempts (identifier_hash, ip, succeeded, attempted_at) VALUES (?, ?, ?, ?)',

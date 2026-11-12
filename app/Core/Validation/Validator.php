@@ -94,6 +94,9 @@ final class Validator
             case 'maxbytes':
                 return strlen($value) > (int) $arg
                     ? self::upper($label) . ' maksimal ' . (int) $arg . ' byte.' : null;
+            case 'nonul':
+                return str_contains($value, "\0")
+                    ? self::upper($label) . ' mengandung karakter tidak valid.' : null;
             case 'confirmed':
                 $other = $data[$field . '_confirmation'] ?? null;
                 if (is_scalar($other)) {

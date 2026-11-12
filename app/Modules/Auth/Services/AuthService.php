@@ -24,7 +24,12 @@ final class AuthService
 
     private const MAX_PASSWORD_BYTES = 72;
 
-    private static ?string $dummyHash = null;
+    /**
+     * Hash bcrypt prakomputasi (cost 10 = PASSWORD_DEFAULT, sama dengan PasswordHasher) untuk email tak dikenal,
+     * sehingga jalur itu hanya satu verify() seperti jalur email dikenal dan tidak ada hash() malas per proses.
+     * Jika cost default PHP/PasswordHasher naik, buat ulang konstanta ini (ada tesnya).
+     */
+    public const DUMMY_HASH = '$2y$10$hh6X1YdBuzIZSpvtUZwaQ.pm3zfvuWngSjqpYuxKl0f1AXzXmlS2.';
 
     private Closure $clock;
 
@@ -55,7 +60,7 @@ final class AuthService
         $user = $this->users->findByEmail($email);
         $tooLong = strlen($password) > self::MAX_PASSWORD_BYTES;
         // Batas bcrypt 72 byte: lebih panjang dari itu tidak pernah dicocokkan (sisa byte akan diabaikan diam-diam).
-        $hash = $user !== null && !$tooLong ? (string) $user['password_hash'] : $this->dummyHash();
+        $hash = $user !== null && !$tooLong ? (string) $user['password_hash'] : self::DUMMY_HASH;
         $passwordOk = $this->hasher->verify($tooLong ? '' : $password, $hash) && $user !== null && !$tooLong;
 
         $tenantActive = $user !== null && $this->tenantStatus((int) $user['tenant_id']) === 'active';
@@ -173,11 +178,6 @@ final class AuthService
     {
         $row = $this->db->fetchOne('SELECT status FROM tenants WHERE id = ?', [$tenantId]);
         return $row === null ? null : (string) $row['status'];
-    }
-
-    private function dummyHash(): string
-    {
-        return self::$dummyHash ??= $this->hasher->hash('dummy-password-for-timing');
     }
 
     private static function fingerprint(string $passwordHash): string

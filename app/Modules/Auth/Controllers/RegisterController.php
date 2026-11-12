@@ -50,7 +50,7 @@ final class RegisterController
             'business_name' => 'required|max:150',
             'business_type' => 'max:100',
             'address' => 'max:500',
-            'password' => 'required|min:8|maxbytes:72|confirmed',
+            'password' => 'required|min:8|maxbytes:72|nonul|confirmed',
             'password_confirmation' => 'required',
         ], [
             'owner_name' => 'nama pemilik',
@@ -93,7 +93,7 @@ final class RegisterController
         return Response::html(
             View::render('auth/verify-result', ['title' => $ok ? 'Email terverifikasi' : 'Tautan tidak valid', 'success' => $ok]),
             $ok ? 200 : 404
-        );
+        )->sensitive();
     }
 
     public function resendForm(Request $request): Response

@@ -51,7 +51,7 @@ final class PasswordResetController
         try {
             $this->service->request($email, $ip);
         } catch (MailException) {
-            // Tetap netral: kegagalan kirim tidak boleh membedakan email terdaftar dari yang tidak.
+            // Cadangan: layanan sudah menelan kegagalan kirim; respons harus tetap netral.
         }
         return $this->requestPage($request, [], '', self::NEUTRAL, 200);
     }
@@ -69,10 +69,14 @@ final class PasswordResetController
     {
         $token = (string) $request->attribute('token', '');
         $result = Validator::make($request->all(), [
-            'password' => 'required|min:8|maxbytes:72|confirmed',
+            'password' => 'required|min:8|maxbytes:72|nonul|confirmed',
             'password_confirmation' => 'required',
         ], ['password' => 'kata sandi', 'password_confirmation' => 'konfirmasi kata sandi']);
         if ($result->fails()) {
+            // Jangan menampilkan ulang token rute yang tidak valid/kedaluwarsa di formulir.
+            if (!$this->service->isValidToken($token)) {
+                return $this->invalid();
+            }
             return $this->resetPage($request, $token, $result->errors(), 422);
         }
         if (!$this->service->reset($token, $result->validated()['password'])) {
@@ -87,7 +91,7 @@ final class PasswordResetController
 
     private function invalid(): Response
     {
-        return Response::html(View::render('auth/reset-invalid', ['title' => 'Tautan tidak valid']), 404);
+        return Response::html(View::render('auth/reset-invalid', ['title' => 'Tautan tidak valid']), 404)->sensitive();
     }
 
     /** @param array<string, string> $errors */
@@ -99,7 +103,7 @@ final class PasswordResetController
             'errors' => $errors,
             'email' => $email,
             'notice' => $notice,
-        ]), $status);
+        ]), $status)->sensitive();
     }
 
     /** @param array<string, string> $errors */
@@ -110,12 +114,12 @@ final class PasswordResetController
             'csrf' => $this->csrf($request),
             'errors' => $errors,
             'token' => $token,
-        ]), $status);
+        ]), $status)->sensitive();
     }
 
     private function notice(string $heading, string $message, int $status): Response
     {
-        return Response::html(View::render('auth/notice', ['title' => $heading, 'heading' => $heading, 'message' => $message]), $status);
+        return Response::html(View::render('auth/notice', ['title' => $heading, 'heading' => $heading, 'message' => $message]), $status)->sensitive();
     }
 
     private function csrf(Request $request): string

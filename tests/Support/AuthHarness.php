@@ -70,6 +70,11 @@ abstract class AuthHarness extends TestCase
         return new PasswordHasher();
     }
 
+    protected function makeAudit(): AuditLogger
+    {
+        return new AuditLogger(new AuditLogRepository($this->db), static fn (): array => ['ip' => '127.0.0.1'], fn (): int => $this->now);
+    }
+
     protected function wire(): void
     {
         $clock = fn (): int => $this->now;
@@ -84,8 +89,8 @@ abstract class AuthHarness extends TestCase
         $this->auth = new AuthService(
             $this->db,
             $this->users,
-            new RateLimiter($this->db, $this->loginMax, 900, $clock),
-            new RateLimiter($this->db, $this->ipMax, 900, $clock),
+            new RateLimiter($this->db, $this->loginMax, 900, $clock, 3600),
+            new RateLimiter($this->db, $this->ipMax, 900, $clock, 3600),
             $this->hasher,
             $audit,
             $clock

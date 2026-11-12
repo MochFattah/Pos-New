@@ -84,4 +84,29 @@ final class RateLimiterTest extends TestCase
         $this->assertSame(0, count($db->query('SELECT id FROM login_attempts WHERE identifier_hash = ?', [hash('sha256', 'old@toko.id')])));
         $this->assertSame(1, count($db->query('SELECT id FROM login_attempts WHERE identifier_hash = ?', [hash('sha256', 'recent@toko.id')])));
     }
+
+    public function testLoginFailureDoesNotPurgeRowsOfLongerWindowLimiter(): void
+    {
+        $db = Db::fresh();
+        $reset = new RateLimiter($db, 3, 3600, fn (): int => $this->now);
+        $login = new RateLimiter($db, 5, 900, fn (): int => $this->now, 3600);
+        for ($i = 0; $i < 3; $i++) {
+            $reset->record('reset', '1.1.1.1', false);
+        }
+        $this->assertTrue($reset->tooManyAttempts('reset', '1.1.1.1'));
+        $this->now += 1000; // lewat jendela login (900 s), masih dalam jendela reset (3600 s)
+        $login->record('x@toko.id', '1.1.1.1', false);
+        $this->assertTrue($reset->tooManyAttempts('reset', '1.1.1.1'), 'kegagalan login tidak boleh mengurangi batas reset');
+        $this->assertSame(4, count($db->query('SELECT id FROM login_attempts')));
+    }
+
+    public function testRetentionNeverShorterThanOwnWindow(): void
+    {
+        $db = Db::fresh();
+        $rl = new RateLimiter($db, 5, 900, fn (): int => $this->now, 10);
+        $rl->record('a@toko.id', '1.1.1.1', false);
+        $this->now += 800;
+        $rl->record('a@toko.id', '1.1.1.1', false);
+        $this->assertSame(2, count($db->query('SELECT id FROM login_attempts')));
+    }
 }

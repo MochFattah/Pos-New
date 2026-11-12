@@ -95,6 +95,11 @@ final class Connection
         return (int) $this->pdo->lastInsertId();
     }
 
+    public function inTransaction(): bool
+    {
+        return $this->pdo->inTransaction();
+    }
+
     /**
      * Transaksi bersarang memakai SAVEPOINT; exception apa pun me-rollback
      * lingkup yang bersangkutan dan dilempar ulang apa adanya.

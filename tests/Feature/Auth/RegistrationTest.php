@@ -674,4 +674,23 @@ final class RegistrationTest extends TestCase
         $make('https://pos.example.test', true)->send($r['userId'], 'budi@example.com', 'Budi');
         $this->assertSame($sent + 2, count($this->mailer->sent));
     }
+
+    public function testNulByteInPasswordIsRejectedOnRegisterAndInvite(): void
+    {
+        $nul = "abcd\0efghij";
+        $res = $this->post('/daftar', $this->input(['password' => $nul, 'password_confirmation' => $nul]));
+        $this->assertSame(422, $res->status());
+        $this->assertSame(0, $this->count('users'));
+        $r = $this->registerDefault();
+        $inv = $this->invitedUser($r['tenantId']);
+        $this->assertFalse($this->verify->verifyAndSetPassword($inv['token'], $nul));
+        $this->assertThrows(\InvalidArgumentException::class, fn () => $this->register->register($this->input(['email' => 'nul@example.com', 'password' => $nul])));
+    }
+
+    public function testVerifyLinkPageIsNotCachedAndSendsNoReferrer(): void
+    {
+        $res = $this->router->dispatch(Request::create('GET', '/verifikasi-email/' . str_repeat('1', 64)));
+        $this->assertSame('no-store', $res->header('Cache-Control'));
+        $this->assertSame('no-referrer', $res->header('Referrer-Policy'));
+    }
 }

@@ -273,4 +273,49 @@ final class LoginTest extends AuthHarness
         $this->assertSame(2, count($user->roleIds));
         $this->assertSame(['branches.view'], $user->permissions);
     }
+
+    public function testDummyHashIsPrecomputedBcryptWithCurrentCost(): void
+    {
+        $dummy = AuthService::DUMMY_HASH;
+        $info = password_get_info($dummy);
+        $this->assertSame('2y', $info['algo']);
+        $fresh = password_get_info($this->hasher->hash('apa-saja'));
+        $this->assertSame($fresh['options']['cost'], $info['options']['cost'], 'biaya sama dengan PasswordHasher');
+        $this->assertFalse($this->hasher->needsRehash($dummy));
+        $this->assertFalse(password_verify('', $dummy));
+    }
+
+    public function testUnknownEmailLoginNeverHashesOnlyVerifiesOnce(): void
+    {
+        $this->activeOwner();
+        $hashing = new class extends PasswordHasher {
+            public int $hashCalls = 0;
+            public int $verifyCalls = 0;
+            public function hash(string $password): string
+            {
+                $this->hashCalls++;
+                return parent::hash($password);
+            }
+            public function verify(string $password, string $hash): bool
+            {
+                $this->verifyCalls++;
+                return parent::verify($password, $hash);
+            }
+        };
+        $auth = new AuthService($this->db, $this->users, new \App\Core\Security\RateLimiter($this->db, 5, 900), new \App\Core\Security\RateLimiter($this->db, 50, 900), $hashing, $this->makeAudit());
+        $auth->attempt('hantu@example.com', 'x', '8.8.8.8', $this->session);
+        $this->assertSame(0, $hashing->hashCalls);
+        $this->assertSame(1, $hashing->verifyCalls);
+    }
+
+    public function testAuthPagesAreNotCachedAndSendNoReferrer(): void
+    {
+        $form = $this->send('GET', '/masuk');
+        $this->assertSame('no-store', $form->header('Cache-Control'));
+        $this->assertSame('no-referrer', $form->header('Referrer-Policy'));
+        $this->activeOwner();
+        $bad = $this->login('budi@example.com', 'salah');
+        $this->assertSame('no-store', $bad->header('Cache-Control'));
+        $this->assertSame('no-referrer', $bad->header('Referrer-Policy'));
+    }
 }

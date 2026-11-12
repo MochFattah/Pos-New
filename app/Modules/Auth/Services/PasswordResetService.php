@@ -6,6 +6,7 @@ namespace App\Modules\Auth\Services;
 
 use App\Core\Database\Connection;
 use App\Core\Mail\MailerInterface;
+use App\Core\Mail\MailException;
 use App\Core\Security\PasswordHasher;
 use App\Core\Security\TokenService;
 use App\Modules\AuditLogs\Services\AuditLogger;
@@ -40,7 +41,7 @@ final class PasswordResetService
     /**
      * Selalu diam-diam sukses untuk email tak dikenal/tak aktif. Hanya pengguna aktif yang menerima
      * tautan: pengguna pending_verification tidak boleh melewati verifikasi lewat reset.
-     * MailException dari pengiriman dibiarkan naik (pemanggil menelannya agar respons tetap netral).
+     * Email dikirim setelah commit; MailException ditelan agar respons tetap netral.
      */
     public function request(string $email, string $ip = ''): void
     {
@@ -52,7 +53,7 @@ final class PasswordResetService
         }
         $nowTs = ($this->clock)();
         $now = gmdate('Y-m-d H:i:s', $nowTs);
-        $this->db->transaction(function () use ($user, $nowTs, $now, $ip): void {
+        $token = $this->db->transaction(function () use ($user, $nowTs, $now, $ip): array {
             $this->resets->invalidateForUser((int) $user['id'], $now);
             $token = $this->tokens->generate();
             $this->resets->create((int) $user['id'], $token['hash'], gmdate('Y-m-d H:i:s', $nowTs + $this->ttlSeconds), $ip !== '' ? $ip : null, $now);
@@ -65,15 +66,25 @@ final class PasswordResetService
                 (int) $user['id'],
                 ['requested_from_ip' => $ip]
             );
-            $name = trim((string) preg_replace('/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\s]+/u', ' ', (string) $user['name']));
-            $minutes = max(1, intdiv($this->ttlSeconds, 60));
-            $body = "Halo {$name},\n\n"
-                . "Kami menerima permintaan untuk mengatur ulang kata sandi akun POS Retail Anda. Buka tautan berikut:\n\n"
-                . rtrim($this->appUrl, '/') . '/reset-password/' . $token['plain'] . "\n\n"
-                . "Tautan berlaku selama {$minutes} menit dan hanya dapat dipakai sekali.\n"
-                . "Jika Anda tidak memintanya, abaikan email ini; kata sandi Anda tidak berubah.\n";
-            $this->mailer->send((string) $user['email'], 'Atur ulang kata sandi POS Retail', $body);
+            return $token;
         });
+
+        // Email dikirim setelah commit: SMTP lambat tidak menahan transaksi, dan kegagalan kirim tidak
+        // membatalkan token maupun mengubah respons (pengguna cukup meminta ulang). Sisa selisih waktu:
+        // email terdaftar masih menunggu SMTP sebelum respons, email tak dikenal tidak. Menutupnya butuh
+        // antrean email atau fastcgi_finish_request di lapisan HTTP; belum dilakukan.
+        $name = trim((string) preg_replace('/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\s]+/u', ' ', (string) $user['name']));
+        $minutes = max(1, intdiv($this->ttlSeconds, 60));
+        $body = "Halo {$name},\n\n"
+            . "Kami menerima permintaan untuk mengatur ulang kata sandi akun POS Retail Anda. Buka tautan berikut:\n\n"
+            . rtrim($this->appUrl, '/') . '/reset-password/' . $token['plain'] . "\n\n"
+            . "Tautan berlaku selama {$minutes} menit dan hanya dapat dipakai sekali.\n"
+            . "Jika Anda tidak memintanya, abaikan email ini; kata sandi Anda tidak berubah.\n";
+        try {
+            $this->mailer->send((string) $user['email'], 'Atur ulang kata sandi POS Retail', $body);
+        } catch (MailException) {
+            // Respons tetap netral; token sudah tersimpan dan kedaluwarsa sendiri.
+        }
     }
 
     /** Token masih bisa dipakai (untuk menampilkan formulir); tidak mengubah apa pun. */
@@ -88,7 +99,7 @@ final class PasswordResetService
      */
     public function reset(string $plainToken, string $newPassword): bool
     {
-        if (mb_strlen($newPassword) < self::MIN_PASSWORD_LENGTH || strlen($newPassword) > self::MAX_PASSWORD_BYTES) {
+        if (mb_strlen($newPassword) < self::MIN_PASSWORD_LENGTH || strlen($newPassword) > self::MAX_PASSWORD_BYTES || str_contains($newPassword, "\0")) {
             return false;
         }
         $now = gmdate('Y-m-d H:i:s', ($this->clock)());

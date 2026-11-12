@@ -163,13 +163,13 @@ final class PasswordResetTest extends AuthHarness
         $this->assertSame(429, $this->send('POST', '/lupa-password', ['email' => 'budi@example.com'])->status());
     }
 
-    public function testMailFailureStaysNeutralAndLeavesNoUsableToken(): void
+    public function testMailFailureStaysNeutral(): void
     {
         $this->activeOwner();
         $this->mailer->fail = true;
         $this->assertSame(200, $this->send('POST', '/lupa-password', ['email' => 'budi@example.com'])->status());
-        $this->assertSame(0, $this->count('SELECT COUNT(*) AS n FROM password_resets'), 'transaksi dibatalkan saat email gagal');
-        $this->assertThrows(MailException::class, fn () => $this->resets->request('budi@example.com'));
+        $this->assertSame(1, $this->count('SELECT COUNT(*) AS n FROM password_resets'), 'token sudah commit sebelum email dikirim');
+        $this->resets->request('budi@example.com'); // kegagalan kirim ditelan, tidak melempar
     }
 
     public function testRequestAndResetAreAudited(): void
@@ -203,5 +203,77 @@ final class PasswordResetTest extends AuthHarness
         );
         $this->assertThrows(\RuntimeException::class, fn () => $service->request('budi@example.com'));
         $this->assertThrows(\RuntimeException::class, fn () => $service->request('hantu@example.com'));
+    }
+
+    public function testLoginFailureDoesNotReduceResetCap(): void
+    {
+        $this->activeOwner();
+        for ($i = 0; $i < 3; $i++) {
+            $this->assertSame(200, $this->send('POST', '/lupa-password', ['email' => 'budi@example.com'])->status());
+        }
+        $this->now += 1000; // jendela login 900 s lewat, jendela reset 3600 s belum
+        $this->login('budi@example.com', 'salah-total');
+        $this->assertSame(429, $this->send('POST', '/lupa-password', ['email' => 'budi@example.com'])->status());
+    }
+
+    public function testMailIsSentAfterCommitAndFailureKeepsTokenAndStaysNeutral(): void
+    {
+        $this->activeOwner();
+        $probe = new class ($this->db) implements \App\Core\Mail\MailerInterface {
+            public ?bool $inTx = null;
+            public function __construct(private \App\Core\Database\Connection $conn)
+            {
+            }
+            public function send(string $to, string $subject, string $textBody): void
+            {
+                $this->inTx = $this->conn->inTransaction();
+                throw new MailException('smtp down');
+            }
+        };
+        $mailer = $probe;
+        $svc = new \App\Modules\Auth\Services\PasswordResetService(
+            $this->db, new \App\Modules\Auth\Repositories\PasswordResetRepository($this->db), $this->users,
+            new \App\Core\Security\TokenService(), $this->hasher, $mailer,
+            $this->makeAudit(),
+            self::APP_URL, 3600, fn (): int => $this->now
+        );
+        $svc->request('budi@example.com'); // tidak melempar
+        $this->assertSame(false, $probe->inTx, 'email dikirim setelah commit');
+        $this->assertSame(1, $this->count('SELECT COUNT(*) AS n FROM password_resets'));
+    }
+
+    public function testResetRejectsNulByteInNewPasswordWithoutBurningToken(): void
+    {
+        $this->activeOwner();
+        $this->requestReset();
+        $token = $this->mailer->lastResetToken();
+        $this->assertFalse($this->resets->reset($token, "abcd\0efghij"));
+        $page = $this->send('POST', '/reset-password/' . $token, ['password' => "abcd\0efghij", 'password_confirmation' => "abcd\0efghij"]);
+        $this->assertSame(422, $page->status());
+        $this->assertTrue($this->resets->reset($token, self::NEW_PASSWORD));
+    }
+
+    public function testResetPagesAreNotCachedAndSendNoReferrer(): void
+    {
+        $this->activeOwner();
+        $this->requestReset();
+        $token = $this->mailer->lastResetToken();
+        foreach ([
+            $this->send('GET', '/lupa-password'),
+            $this->send('GET', '/reset-password/' . $token),
+            $this->send('GET', '/reset-password/' . str_repeat('0', 64)),
+            $this->send('POST', '/reset-password/' . $token, ['password' => 'x', 'password_confirmation' => 'x']),
+        ] as $res) {
+            $this->assertSame('no-store', $res->header('Cache-Control'));
+            $this->assertSame('no-referrer', $res->header('Referrer-Policy'));
+        }
+    }
+
+    public function testResetFormOn422RevalidatesRouteToken(): void
+    {
+        $this->activeOwner();
+        $res = $this->send('POST', '/reset-password/' . str_repeat('0', 64), ['password' => 'x', 'password_confirmation' => 'x']);
+        $this->assertSame(404, $res->status());
+        $this->assertFalse(str_contains($res->body(), str_repeat('0', 64)));
     }
 }

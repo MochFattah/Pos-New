@@ -44,6 +44,12 @@ final class Response
         return $copy;
     }
 
+    /** Halaman berisi token/kredensial: jangan di-cache dan jangan bocorkan URL lewat Referer. */
+    public function sensitive(): static
+    {
+        return $this->withHeader('Cache-Control', 'no-store')->withHeader('Referrer-Policy', 'no-referrer');
+    }
+
     public function status(): int
     {
         return $this->status;

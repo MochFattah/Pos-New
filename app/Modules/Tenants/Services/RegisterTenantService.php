@@ -43,6 +43,9 @@ final class RegisterTenantService
      */
     public function register(array $input): array
     {
+        if (str_contains($input['password'], "\0")) {
+            throw new \InvalidArgumentException('Kata sandi tidak boleh mengandung byte NUL.');
+        }
         $email = Validator::normalizeEmail($input['email']);
         $phone = ($input['phone'] ?? '') === '' ? null : (string) preg_replace('/[\s\-()]/', '', $input['phone']);
         $address = ($input['address'] ?? '') === '' ? null : $input['address'];
