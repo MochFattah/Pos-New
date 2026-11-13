@@ -14,13 +14,22 @@ final class PolicyTest extends BranchHarness
         $a = $this->activeOwner('a@example.com');
         $b = $this->activeOwner('b@example.com');
         $owner = $this->authUserFor($a['tenantId'], $a['userId']);
-        foreach (['branches.manage', 'users.manage', 'audit_logs.view', 'modul_baru.apa_saja'] as $permission) {
+        foreach (['branches.manage', 'users.manage', 'audit_logs.view'] as $permission) {
             $this->assertTrue($this->policy->can($owner, $permission), $permission);
         }
         $this->assertTrue($this->policy->can($owner, 'branches.manage', $this->mainBranchId($a['tenantId'])));
         // Cabang tenant lain tidak pernah dapat dijangkau, bahkan oleh Owner.
         $this->assertFalse($this->policy->can($owner, 'branches.manage', $this->mainBranchId($b['tenantId'])));
         $this->assertFalse($this->policy->can($owner, 'branches.manage', 999999));
+    }
+
+    public function testOwnerIsDeniedPermissionCodeMissingFromCatalogue(): void
+    {
+        $a = $this->activeOwner();
+        $owner = $this->authUserFor($a['tenantId'], $a['userId']);
+        foreach (['modul_baru.apa_saja', 'branches.manag', 'cabang.manage'] as $code) {
+            $this->assertFalse($this->policy->can($owner, $code), $code);
+        }
     }
 
     public function testMalformedPermissionCodeIsDeniedEvenForOwner(): void

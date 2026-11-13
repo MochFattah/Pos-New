@@ -102,7 +102,7 @@ final class VerifyEmailService
             }
             $tenantId = (int) $user['tenant_id'];
             $hash = $newPassword === null ? null : $this->hasher->hash($newPassword);
-            if (!$this->users->activate((int) $user['id'], $now, $hash)) {
+            if (!$this->users->activate($tenantId, (int) $user['id'], $now, $hash)) {
                 return false;
             }
             if ($owner) {

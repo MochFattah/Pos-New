@@ -12,16 +12,13 @@ final class TenantIsolationTest extends TestCase
     /**
      * Pengecualian disengaja: file => [potongan SQL (dinormalkan) => alasan]. Tiap entri harus
      * benar-benar cocok dengan satu pernyataan (entri basi menggagalkan tes), agar daftar ini
-     * tidak membusuk.
+     * tidak membusuk. Hanya tabel global (tanpa tenant_id) yang boleh diakses tanpa filter tenant di
+     * seluruh app/**: tenants, permissions, demo_settings, tabel token, login_attempts.
      */
     private const ALLOWED = [
         'UserRepository.php' => [
             'SELECT * FROM users WHERE email = ?' => 'Email unik global (spec 5); dipakai login sebelum tenant diketahui. Tenant diturunkan dari baris hasil.',
-            'SELECT * FROM users WHERE id = ?' => 'findByIdAnyTenant: alur token (verifikasi/reset) hanya memegang user_id dari baris token tepercaya; tenant diturunkan dari baris pengguna.',
-            "UPDATE users SET status = 'active', email_verified_at = ?, updated_at = ? WHERE id = ? AND status = 'pending_verification'" => 'Aktivasi dari alur token; user_id berasal dari baris token tepercaya, bukan dari request.',
-            "UPDATE users SET status = 'active', email_verified_at = ?, password_hash = ?, updated_at = ? WHERE id = ? AND status = 'pending_verification'" => 'Aktivasi + set password dari alur token undangan; user_id dari baris token.',
-            "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ? AND status = 'active'" => 'Reset password dari alur token; user_id dari baris token.',
-            'UPDATE users SET last_login_at = ? WHERE id = ?' => 'Dipanggil setelah autentikasi sukses; user_id dari baris pengguna yang baru diverifikasi.',
+            'SELECT * FROM users WHERE id = ?' => 'findByIdAnyTenant: tabel token (email_verifications/password_resets) tidak punya tenant_id, jadi alur token hanya memegang user_id tepercaya; tenant diturunkan dari baris pengguna, lalu semua tulis memakai tenant_id.',
         ],
     ];
 
@@ -65,11 +62,16 @@ PHP;
         $this->assertContains('FROM audit_logs', $found[2]);
     }
 
-    public function testNoRepositoryQueryOmitsTenantId(): void
+    public function testNoAppQueryOmitsTenantId(): void
     {
         $tables = $this->tenantTables();
-        $files = glob($this->root() . '/app/Modules/*/Repositories/*.php') ?: [];
-        $this->assertTrue(count($files) >= 7, 'pemindai harus menemukan repository T7-T10');
+        $files = [];
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($this->root() . '/app', \FilesystemIterator::SKIP_DOTS)) as $f) {
+            if ($f->getExtension() === 'php') {
+                $files[] = $f->getPathname();
+            }
+        }
+        $this->assertTrue(count($files) >= 40, 'pemindai harus menemukan seluruh app/**');
         $used = [];
         $problems = [];
         foreach ($files as $file) {

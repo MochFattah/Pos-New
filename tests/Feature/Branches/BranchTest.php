@@ -62,7 +62,7 @@ final class BranchTest extends BranchHarness
                 return false;
             }
         };
-        $service = new \App\Modules\Branches\Services\BranchService($this->db, $repo, $this->policy, $this->makeAudit());
+        $service = new \App\Modules\Branches\Services\BranchService($this->db, $repo, $this->policy, $this->makeAudit(), new \App\Core\Authorization\AccessDeniedRecorder($this->makeAudit()));
         $this->assertThrows(ValidationException::class, fn () => $service->create($owner, ['code' => 'UTAMA', 'name' => 'x']));
         $this->assertSame(0, $this->count("SELECT COUNT(*) AS n FROM audit_logs WHERE action = 'branch.created'"));
     }
@@ -138,7 +138,38 @@ final class BranchTest extends BranchHarness
         $this->assertThrows(NotFoundException::class, fn () => $this->branchService->deactivate($ownerA, $branchB));
         $this->assertThrows(NotFoundException::class, fn () => $this->branchService->activate($ownerA, $branchB));
         $this->assertSame($before, $this->branchRepo->find($b['tenantId'], $branchB));
-        $this->assertSame(0, $this->count("SELECT COUNT(*) AS n FROM audit_logs WHERE entity_type = 'branch' AND entity_id = ?", [$branchB]));
+        $this->assertSame(0, $this->count("SELECT COUNT(*) AS n FROM audit_logs WHERE entity_type = 'branch' AND entity_id = ? AND action LIKE 'branch.%'", [$branchB]));
+    }
+
+    public function testCrossTenantAndNonexistentIdsAreRecordedUnderActorTenantOnly(): void
+    {
+        $a = $this->activeOwner('a@example.com');
+        $b = $this->activeOwner('b@example.com');
+        $ownerA = $this->authUserFor($a['tenantId'], $a['userId']);
+        $branchB = $this->mainBranchId($b['tenantId']);
+        $before = $this->count("SELECT COUNT(*) AS n FROM audit_logs WHERE tenant_id = ?", [$b['tenantId']]);
+        $this->assertThrows(NotFoundException::class, fn () => $this->branchService->get($ownerA, $branchB));
+        $this->assertThrows(NotFoundException::class, fn () => $this->branchService->get($ownerA, 987654));
+        $rows = $this->db->query("SELECT * FROM audit_logs WHERE action = 'security.entity_not_found' ORDER BY id");
+        $this->assertSame(2, count($rows));
+        foreach ($rows as $row) {
+            $this->assertSame($a['tenantId'], (int) $row['tenant_id']);
+            $this->assertSame($a['userId'], (int) $row['actor_id']);
+            $this->assertSame('branch', $row['entity_type']);
+        }
+        $this->assertSame($branchB, (int) $rows[0]['entity_id']);
+        $this->assertSame($before, $this->count("SELECT COUNT(*) AS n FROM audit_logs WHERE tenant_id = ?", [$b['tenantId']]));
+    }
+
+    public function testPermissionDeniedIsRecordedWithActorTenantAndCode(): void
+    {
+        $a = $this->activeOwner();
+        $viewer = $this->authUserFor($a['tenantId'], $this->makeUser($a['tenantId'], 'v@example.com', ['branches.view']));
+        $this->assertThrows(ForbiddenException::class, fn () => $this->policy->authorize($viewer, 'branches.manage'));
+        $row = $this->db->fetchOne("SELECT * FROM audit_logs WHERE action = 'security.permission_denied'");
+        $this->assertSame($a['tenantId'], (int) $row['tenant_id']);
+        $this->assertSame($viewer->id, (int) $row['actor_id']);
+        $this->assertContains('branches.manage', (string) $row['metadata']);
     }
 
     public function testServiceChecksPermissionBeforeLookup(): void

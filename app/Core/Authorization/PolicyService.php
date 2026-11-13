@@ -17,8 +17,17 @@ class PolicyService
 {
     private const PERMISSION_PATTERN = '/^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\z/';
 
-    public function __construct(private readonly Connection $db)
+    /** @var array<string, bool> cache per instance: kode => ada di tabel permissions */
+    private array $known = [];
+
+    public function __construct(private readonly Connection $db, private readonly ?AccessDeniedRecorder $denied = null)
     {
+    }
+
+    /** Kode harus ada di katalog permissions; typo pada rute menolak semua orang, termasuk Owner. */
+    private function isKnown(string $permission): bool
+    {
+        return $this->known[$permission] ??= $this->db->fetchOne('SELECT 1 AS ok FROM permissions WHERE code = ?', [$permission]) !== null;
     }
 
     public function can(AuthUser $user, string $permission, ?int $branchId = null): bool
@@ -26,7 +35,7 @@ class PolicyService
         if (preg_match(self::PERMISSION_PATTERN, $permission) !== 1) {
             return false;
         }
-        if (!$user->isOwner && !in_array($permission, $user->permissions, true)) {
+        if ($user->isOwner ? !$this->isKnown($permission) : !in_array($permission, $user->permissions, true)) {
             return false;
         }
         if ($branchId === null) {
@@ -48,6 +57,7 @@ class PolicyService
     public function authorize(AuthUser $user, string $permission, ?int $branchId = null): void
     {
         if (!$this->can($user, $permission, $branchId)) {
+            $this->denied?->permissionDenied($user, $permission, $branchId);
             throw new ForbiddenException();
         }
     }

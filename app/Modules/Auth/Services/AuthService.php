@@ -88,7 +88,7 @@ final class AuthService
         $session->set(self::SESSION_USER, $authUser->id);
         $session->set(self::SESSION_TENANT, $authUser->tenantId);
         $session->set(self::SESSION_FINGERPRINT, self::fingerprint((string) $user['password_hash']));
-        $this->users->touchLastLogin($authUser->id, gmdate('Y-m-d H:i:s', ($this->clock)()));
+        $this->users->touchLastLogin($authUser->tenantId, $authUser->id, gmdate('Y-m-d H:i:s', ($this->clock)()));
         $this->audit->record('auth.login', $authUser->tenantId, AuditLogger::ACTOR_TENANT_USER, $authUser->id, 'user', $authUser->id);
         return AuthResult::ok($authUser);
     }

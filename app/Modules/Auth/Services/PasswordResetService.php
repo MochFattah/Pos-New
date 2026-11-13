@@ -113,7 +113,7 @@ final class PasswordResetService
             if (!$this->resets->markUsed((int) $row['id'], $now)) {
                 return false;
             }
-            if (!$this->users->updatePassword((int) $user['id'], $this->hasher->hash($newPassword), $now)) {
+            if (!$this->users->updatePassword((int) $user['tenant_id'], (int) $user['id'], $this->hasher->hash($newPassword), $now)) {
                 return false;
             }
             $this->resets->invalidateForUser((int) $user['id'], $now);

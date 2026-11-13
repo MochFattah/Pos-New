@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Branches\Services;
 
+use App\Core\Authorization\AccessDeniedRecorder;
 use App\Core\Authorization\AuthUser;
 use App\Core\Authorization\PolicyService;
 use App\Core\Database\Connection;
@@ -34,6 +35,7 @@ final class BranchService
         private readonly BranchRepository $branches,
         private readonly PolicyService $policy,
         private readonly AuditLogger $audit,
+        private readonly AccessDeniedRecorder $denied,
         ?callable $clock = null
     ) {
         $this->clock = $clock ?? static fn (): int => time();
@@ -149,6 +151,7 @@ final class BranchService
     {
         $branch = $this->branches->find($actor->tenantId, $id);
         if ($branch === null) {
+            $this->denied->entityNotFound($actor, 'branch', $id);
             throw new NotFoundException('Cabang tidak ditemukan.');
         }
         return $branch;

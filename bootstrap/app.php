@@ -7,6 +7,7 @@ use App\Core\Config;
 use App\Core\Env;
 use App\Core\Middleware\AccessGateMiddleware;
 use App\Core\Middleware\AuthMiddleware;
+use App\Core\Authorization\AccessDeniedRecorder;
 use App\Core\Authorization\PolicyService;
 use App\Core\Middleware\CsrfMiddleware;
 use App\Core\Middleware\PermissionMiddleware;
@@ -165,14 +166,20 @@ $buildPasswordResetController = static function () use ($buildAuditLogger, $shar
     );
 };
 
-$buildBranchController = static function () use ($buildAuditLogger, $sharedDb): BranchController {
-    $db = $sharedDb();
-    $policy = new PolicyService($db);
-    return new BranchController(new BranchService($db, new BranchRepository($db), $policy, $buildAuditLogger($db)), $policy);
+// Satu PolicyService (dan cache katalog permission-nya) per request.
+$sharedPolicy = static function () use ($buildAuditLogger, $sharedDb): PolicyService {
+    static $policy = null;
+    return $policy ??= new PolicyService($sharedDb(), new AccessDeniedRecorder($buildAuditLogger($sharedDb())));
 };
 
-$buildRouter = static function () use ($basePath, $buildGlobalMiddleware, $buildRegisterController, $buildAuthService, $buildPasswordResetController, $buildBranchController, $sharedDb): Router {
-    PermissionMiddleware::provide(static fn (): PolicyService => new PolicyService($sharedDb()));
+$buildBranchController = static function () use ($buildAuditLogger, $sharedDb, $sharedPolicy): BranchController {
+    $db = $sharedDb();
+    $policy = $sharedPolicy();
+    return new BranchController(new BranchService($db, new BranchRepository($db), $policy, $buildAuditLogger($db), new AccessDeniedRecorder($buildAuditLogger($db))), $policy);
+};
+
+$buildRouter = static function () use ($basePath, $buildGlobalMiddleware, $buildRegisterController, $buildAuthService, $buildPasswordResetController, $buildBranchController, $sharedDb, $sharedPolicy): Router {
+    PermissionMiddleware::provide($sharedPolicy);
     // Resolver: controller yang butuh layanan dirakit lewat builder-nya; sisanya dibuat tanpa argumen.
     $router = new Router(static fn (string $class): object => match ($class) {
         RegisterController::class => $buildRegisterController(),

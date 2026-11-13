@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Support;
 
+use App\Core\Authorization\AccessDeniedRecorder;
 use App\Core\Authorization\AuthUser;
 use App\Core\Authorization\PolicyService;
 use App\Core\Middleware\PermissionMiddleware;
@@ -20,9 +21,10 @@ abstract class BranchHarness extends AuthHarness
 
     protected function extraServices(): array
     {
-        $this->policy = new PolicyService($this->db);
+        $denied = new AccessDeniedRecorder($this->makeAudit());
+        $this->policy = new PolicyService($this->db, $denied);
         $this->branchRepo = new BranchRepository($this->db);
-        $this->branchService = new BranchService($this->db, $this->branchRepo, $this->policy, $this->makeAudit(), fn (): int => $this->now);
+        $this->branchService = new BranchService($this->db, $this->branchRepo, $this->policy, $this->makeAudit(), $denied, fn (): int => $this->now);
         PermissionMiddleware::provide(fn (): PolicyService => $this->policy);
         return [BranchController::class => new BranchController($this->branchService, $this->policy)];
     }

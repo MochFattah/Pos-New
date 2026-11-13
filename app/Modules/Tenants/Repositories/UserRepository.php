@@ -57,32 +57,32 @@ class UserRepository
         return $this->db->lastInsertId();
     }
 
-    public function activate(int $userId, string $now, ?string $passwordHash = null): bool
+    public function activate(int $tenantId, int $userId, string $now, ?string $passwordHash = null): bool
     {
         if ($passwordHash === null) {
             return $this->db->execute(
-                "UPDATE users SET status = 'active', email_verified_at = ?, updated_at = ? WHERE id = ? AND status = 'pending_verification'",
-                [$now, $now, $userId]
+                "UPDATE users SET status = 'active', email_verified_at = ?, updated_at = ? WHERE tenant_id = ? AND id = ? AND status = 'pending_verification'",
+                [$now, $now, $tenantId, $userId]
             ) === 1;
         }
         return $this->db->execute(
-            "UPDATE users SET status = 'active', email_verified_at = ?, password_hash = ?, updated_at = ? WHERE id = ? AND status = 'pending_verification'",
-            [$now, $passwordHash, $now, $userId]
+            "UPDATE users SET status = 'active', email_verified_at = ?, password_hash = ?, updated_at = ? WHERE tenant_id = ? AND id = ? AND status = 'pending_verification'",
+            [$now, $passwordHash, $now, $tenantId, $userId]
         ) === 1;
     }
 
     /** Mengganti password (hanya pengguna aktif). Hash baru sekaligus mencabut semua sesi lama (sidik jari di sesi). */
-    public function updatePassword(int $userId, string $passwordHash, string $now): bool
+    public function updatePassword(int $tenantId, int $userId, string $passwordHash, string $now): bool
     {
         return $this->db->execute(
-            "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ? AND status = 'active'",
-            [$passwordHash, $now, $userId]
+            "UPDATE users SET password_hash = ?, updated_at = ? WHERE tenant_id = ? AND id = ? AND status = 'active'",
+            [$passwordHash, $now, $tenantId, $userId]
         ) === 1;
     }
 
-    public function touchLastLogin(int $userId, string $now): void
+    public function touchLastLogin(int $tenantId, int $userId, string $now): void
     {
-        $this->db->execute('UPDATE users SET last_login_at = ? WHERE id = ?', [$now, $userId]);
+        $this->db->execute('UPDATE users SET last_login_at = ? WHERE tenant_id = ? AND id = ?', [$now, $tenantId, $userId]);
     }
 
     private static function isDuplicateEmail(PDOException $e): bool

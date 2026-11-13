@@ -6,7 +6,6 @@ namespace App\Core\Middleware;
 
 use App\Core\Authorization\AuthUser;
 use App\Core\Authorization\PolicyService;
-use App\Core\Exceptions\ForbiddenException;
 use App\Core\Request;
 use App\Core\Response;
 use LogicException;
@@ -46,9 +45,7 @@ final class PermissionMiddleware implements MiddlewareInterface
             throw new LogicException('PolicyService belum didaftarkan untuk PermissionMiddleware.');
         }
         $policy = (self::$provider)();
-        if (!$policy->can($user, $this->permission)) {
-            throw new ForbiddenException();
-        }
+        $policy->authorize($user, $this->permission);
         return $next($request);
     }
 }
