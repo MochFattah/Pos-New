@@ -13,14 +13,17 @@ use App\Core\Exceptions\ValidationException;
  * - Nama berkas dibuat server (bin2hex(random_bytes(16))); nama dari klien tidak pernah dipakai.
  * - Ekstensi diturunkan dari MIME hasil finfo, bukan dari klaim klien; hanya png/jpeg/webp (SVG, GIF ditolak).
  * - getimagesize harus sepakat dengan finfo, dimensi dibatasi (bom dekompresi).
- * - Polyglot ditolak: PNG harus berakhir tepat di chunk IEND, JPEG di FFD9, WebP sesuai ukuran RIFF, dan
- *   berkas yang memuat "<?php" atau "<?=" ditolak. Berkas tersimpan tanpa bit eksekusi dan hanya
- *   disajikan lewat rute terkontrol dengan Content-Type gambar + nosniff.
+ * - Struktur: PNG harus memuat chunk IEND, JPEG penanda FFD9 (EOI), dengan trailer maksimal 4 KB sesudahnya
+ *   (EXIF/padding/tanda tangan editor); WebP harus sesuai ukuran RIFF. Pemindaian "<?php" sengaja tidak ada:
+ *   berkas tidak pernah di-include/dieksekusi dan menghasilkan false positive pada gambar sah. Berkas
+ *   tersimpan di luar docroot tanpa bit eksekusi dan hanya disajikan lewat rute terkontrol dengan
+ *   Content-Type gambar + nosniff + CSP sandbox.
  * - Hapus/baca hanya untuk nama yang cocok pola ketat di dalam direktori tenant yang bersangkutan.
  */
 class LogoUploader
 {
     public const MAX_BYTES = 1048576;
+    private const MAX_TRAILER = 4096;
     private const MAX_PIXELS = 25_000_000;
     private const NAME_PATTERN = '/^[a-f0-9]{32}\.(png|jpg|webp)\z/';
 
@@ -156,15 +159,20 @@ class LogoUploader
 
     private static function cleanStructure(string $mime, string $bytes): bool
     {
-        if (preg_match('/<\?(php|=)/i', $bytes) === 1) {
-            return false;
-        }
+        $len = strlen($bytes);
         return match ($mime) {
-            'image/png' => str_ends_with($bytes, "\0\0\0\0IEND\xAE\x42\x60\x82"),
-            'image/jpeg' => str_ends_with($bytes, "\xFF\xD9"),
-            'image/webp' => strlen($bytes) >= 12 && (int) unpack('V', substr($bytes, 4, 4))[1] + 8 === strlen($bytes),
+            'image/png' => self::endsWithinTrailer($bytes, "\0\0\0\0IEND\xAE\x42\x60\x82"),
+            'image/jpeg' => self::endsWithinTrailer($bytes, "\xFF\xD9"),
+            'image/webp' => $len >= 12 && (int) unpack('V', substr($bytes, 4, 4))[1] + 8 === $len,
             default => false,
         };
+    }
+
+    /** Penanda akhir harus ada dan sisa byte sesudahnya tidak lebih dari MAX_TRAILER. */
+    private static function endsWithinTrailer(string $bytes, string $marker): bool
+    {
+        $pos = strrpos($bytes, $marker);
+        return $pos !== false && strlen($bytes) - ($pos + strlen($marker)) <= self::MAX_TRAILER;
     }
 
     /** @return never */

@@ -137,13 +137,48 @@ final class LogoUploaderTest extends TestCase
         $this->rejected(ImageFixtures::upload($svg, 'logo.png', 'image/png'));
     }
 
-    public function testRejectsPolyglotPngWithPhpPayload(): void
+    public function testPhpTagsInsideValidImageAreStoredInertNotRejected(): void
+    {
+        // Berkas tidak pernah dieksekusi (di luar docroot, 0640, nama+ekstensi dari MIME, disajikan dengan
+        // Content-Type gambar + nosniff + CSP sandbox), jadi pemindaian "<?php"/"<?=" hanya menghasilkan
+        // false positive pada gambar sah dan dibuang. Payload kecil dalam batas trailer tetap tersimpan inert.
+        $png = (string) file_get_contents(ImageFixtures::image($this->tmp));
+        foreach (['<?php system($_GET["c"]); ?>', '<?= `id` ?>'] as $payload) {
+            $path = ImageFixtures::file($this->tmp, $png . $payload);
+            $name = $this->uploader()->store(7, ImageFixtures::upload($path));
+            $this->assertTrue(preg_match('/^[a-f0-9]{32}\.png\z/', $name) === 1);
+            $this->assertSame('0640', substr(sprintf('%o', fileperms($this->base . '/7/' . $name)), -4));
+        }
+    }
+
+    public function testAcceptsPngAndJpegWithBoundedTrailer(): void
     {
         $png = (string) file_get_contents(ImageFixtures::image($this->tmp));
-        foreach (['<?php system($_GET["c"]); ?>', '<?= `id` ?>', '<?PHP echo 1;'] as $payload) {
-            $path = ImageFixtures::file($this->tmp, $png . $payload);
-            $this->rejected(ImageFixtures::upload($path));
+        $jpeg = (string) file_get_contents(ImageFixtures::image($this->tmp, 'jpeg'));
+        $trailers = [str_repeat("\0", 512), "\n", "Exif\0\0" . str_repeat("\x01\x02", 100), str_repeat('x', 4096)];
+        foreach ($trailers as $t) {
+            foreach ([[$png, 'image/png'], [$jpeg, 'image/jpeg']] as [$bytes, $type]) {
+                $path = ImageFixtures::file($this->tmp, $bytes . $t);
+                $name = $this->uploader()->store(7, ImageFixtures::upload($path, 'l', $type));
+                $this->assertTrue(is_file($this->base . '/7/' . $name));
+            }
         }
+    }
+
+    public function testRejectsTrailerBeyondBound(): void
+    {
+        $png = (string) file_get_contents(ImageFixtures::image($this->tmp));
+        $jpeg = (string) file_get_contents(ImageFixtures::image($this->tmp, 'jpeg'));
+        $this->rejected(ImageFixtures::upload(ImageFixtures::file($this->tmp, $png . str_repeat("\0", 4097))));
+        $this->rejected(ImageFixtures::upload(ImageFixtures::file($this->tmp, $jpeg . str_repeat("\0", 4097)), 'l.jpg', 'image/jpeg'));
+    }
+
+    public function testRejectsMissingEndMarker(): void
+    {
+        $png = (string) file_get_contents(ImageFixtures::image($this->tmp));
+        $jpeg = (string) file_get_contents(ImageFixtures::image($this->tmp, 'jpeg'));
+        $this->rejected(ImageFixtures::upload(ImageFixtures::file($this->tmp, substr($png, 0, -12))));
+        $this->rejected(ImageFixtures::upload(ImageFixtures::file($this->tmp, substr($jpeg, 0, -2)), 'l.jpg', 'image/jpeg'));
     }
 
     public function testRejectsEmptyAndGarbageAndTruncated(): void

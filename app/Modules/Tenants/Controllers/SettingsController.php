@@ -84,12 +84,23 @@ final class SettingsController
         if ($logo === null || $bytes === false) {
             throw new NotFoundException('Logo belum diunggah.');
         }
-        return (new Response($bytes))
+        // Nama berkas acak dan unik per unggahan, jadi cukup sebagai validator ETag.
+        $etag = '"' . pathinfo($logo['path'], PATHINFO_FILENAME) . '"';
+        $res = (new Response($bytes))
+            ->withHeader('ETag', $etag)
             ->withHeader('Content-Type', $logo['mime'])
             ->withHeader('X-Content-Type-Options', 'nosniff')
-            ->withHeader('Cache-Control', 'private, no-cache')
+            ->withHeader('Cache-Control', 'private, max-age=0, must-revalidate')
             ->withHeader('Content-Disposition', 'inline')
             ->withHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+        $match = $request->header('If-None-Match');
+        if ($match !== null && in_array($etag, array_map('trim', explode(',', $match)), true)) {
+            return (new Response('', 304))
+                ->withHeader('ETag', $etag)
+                ->withHeader('Cache-Control', 'private, max-age=0, must-revalidate')
+                ->withHeader('X-Content-Type-Options', 'nosniff');
+        }
+        return $res->withHeader('Content-Length', (string) strlen($bytes));
     }
 
     /**

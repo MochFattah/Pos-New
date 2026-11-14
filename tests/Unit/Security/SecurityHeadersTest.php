@@ -63,4 +63,12 @@ final class SecurityHeadersTest extends TestCase
         $this->assertTrue($res->header('Strict-Transport-Security') !== null);
         $this->assertSame(null, SecurityHeaders::apply(Response::html(''), false)->header('Strict-Transport-Security'));
     }
+
+    public function testExistingContentSecurityPolicyIsKept(): void
+    {
+        $csp = "default-src 'none'; sandbox";
+        $res = SecurityHeaders::apply(Response::html('')->withHeader('Content-Security-Policy', $csp), false);
+        $this->assertSame($csp, $res->header('Content-Security-Policy'));
+        $this->assertContains("default-src 'self'", (string) SecurityHeaders::apply(Response::html(''), false)->header('Content-Security-Policy'));
+    }
 }

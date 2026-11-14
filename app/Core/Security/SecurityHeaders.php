@@ -6,14 +6,15 @@ namespace App\Core\Security;
 
 use App\Core\Response;
 
-/** Satu-satunya sumber daftar header keamanan. */
+/** Satu-satunya sumber daftar header keamanan. CSP dan Referrer-Policy yang sudah diset rute dipertahankan. */
 final class SecurityHeaders
 {
     public static function apply(Response $response, bool $hsts): Response
     {
+        $csp = $response->header('Content-Security-Policy') ?? "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
         $referrer = $response->header('Referrer-Policy') ?? 'strict-origin-when-cross-origin';
         $response = $response
-            ->withHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+            ->withHeader('Content-Security-Policy', $csp)
             ->withHeader('X-Frame-Options', 'DENY')
             ->withHeader('X-Content-Type-Options', 'nosniff')
             ->withHeader('Referrer-Policy', $referrer)

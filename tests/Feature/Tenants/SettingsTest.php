@@ -6,6 +6,7 @@ namespace Tests\Feature\Tenants;
 
 use App\Core\Exceptions\ForbiddenException;
 use App\Core\Exceptions\ValidationException;
+use App\Core\Request;
 use Tests\Support\ImageFixtures;
 use Tests\Support\SettingsHarness;
 
@@ -192,7 +193,25 @@ final class SettingsTest extends SettingsHarness
         $this->assertSame(200, $img->status());
         $this->assertSame('image/png', $img->header('Content-Type'));
         $this->assertSame('nosniff', $img->header('X-Content-Type-Options'));
-        $this->assertTrue(str_contains((string) $img->header('Cache-Control'), 'private'));
+        $this->assertSame('private, max-age=0, must-revalidate', $img->header('Cache-Control'));
+        $this->assertSame((string) strlen($img->body()), $img->header('Content-Length'));
+        $etag = (string) $img->header('ETag');
+        $this->assertTrue(preg_match('/^"[a-f0-9]{32}"\z/', $etag) === 1, $etag);
+
+        // Tumpukan penuh (Application): CSP sandbox milik rute logo tidak boleh tertimpa default.
+        $app = new \App\Core\Application($this->router, $this->tmp . '/app.log');
+        $full = $app->handle(Request::create('GET', '/pengaturan/logo'));
+        $this->assertTrue(str_contains((string) $full->header('Content-Security-Policy'), 'sandbox'));
+        $this->assertSame('nosniff', $full->header('X-Content-Type-Options'));
+        $page = $app->handle(Request::create('GET', '/pengaturan'));
+        $this->assertContains("default-src 'self'", (string) $page->header('Content-Security-Policy'));
+
+        // Validasi ulang: If-None-Match cocok -> 304 tanpa body; tidak cocok -> 200.
+        $nm = $app->handle(Request::create('GET', '/pengaturan/logo', [], ['If-None-Match' => $etag]));
+        $this->assertSame(304, $nm->status());
+        $this->assertSame('', $nm->body());
+        $this->assertSame($etag, $nm->header('ETag'));
+        $this->assertSame(200, $app->handle(Request::create('GET', '/pengaturan/logo', [], ['If-None-Match' => '"other"']))->status());
         $this->assertSame((string) file_get_contents($this->logosDir . '/' . $a['tenantId'] . '/' . $first), $img->body());
         $this->assertTrue(str_contains($this->send('GET', '/pengaturan')->body(), 'src="/pengaturan/logo'));
 
@@ -280,15 +299,19 @@ final class SettingsTest extends SettingsHarness
         }
     }
 
-    public function testPolyglotStoredUnderSafeExtensionIsRejected(): void
+    public function testPolyglotIsStoredInertAndServedAsSandboxedImage(): void
     {
         $a = $this->owner();
         $png = (string) file_get_contents(ImageFixtures::image($this->tmp));
         $path = ImageFixtures::file($this->tmp, $png . '<?php system($_GET["c"]); ?>');
-        $r = $this->sendWithFiles('/pengaturan/logo', [], ['logo' => ImageFixtures::upload($path, 'a.php.png')]);
-        $this->assertSame(422, $r->status());
-        $this->assertSame(null, $this->logoFor($a['tenantId']));
-        $this->assertSame([], glob($this->logosDir . '/*/*') ?: []);
+        $this->sendWithFiles('/pengaturan/logo', [], ['logo' => ImageFixtures::upload($path, 'a.php.png')]);
+        $name = (string) $this->logoFor($a['tenantId']);
+        $this->assertTrue(preg_match('/^[a-f0-9]{32}\.png\z/', $name) === 1, $name);
+        $app = new \App\Core\Application($this->router, $this->tmp . '/app.log');
+        $res = $app->handle(Request::create('GET', '/pengaturan/logo'));
+        $this->assertSame('image/png', $res->header('Content-Type'));
+        $this->assertSame('nosniff', $res->header('X-Content-Type-Options'));
+        $this->assertTrue(str_contains((string) $res->header('Content-Security-Policy'), 'sandbox'));
     }
 
     public function testUploadsDirectoryIsOutsidePublicAndGuarded(): void
