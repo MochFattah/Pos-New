@@ -1,5 +1,7 @@
 .env
 storage/*
 !storage/.gitkeep
+!storage/.htaccess
+!storage/index.html
 node_modules/
 .superpowers/

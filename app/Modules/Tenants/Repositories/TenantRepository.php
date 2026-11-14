@@ -60,6 +60,40 @@ final class TenantRepository
         ) === 1;
     }
 
+    /** @return array<string, mixed>|null */
+    public function findProfile(int $tenantId): ?array
+    {
+        return $this->db->fetchOne('SELECT * FROM tenant_profiles WHERE tenant_id = ?', [$tenantId]);
+    }
+
+    /** @return array<string, mixed>|null */
+    public function findSettings(int $tenantId): ?array
+    {
+        return $this->db->fetchOne('SELECT * FROM tenant_settings WHERE tenant_id = ?', [$tenantId]);
+    }
+
+    public function updateProfile(int $tenantId, ?string $businessType, ?string $address, ?string $phone): void
+    {
+        $this->db->execute(
+            'UPDATE tenant_profiles SET business_type = ?, address = ?, phone = ? WHERE tenant_id = ?',
+            [$businessType, $address, $phone, $tenantId]
+        );
+    }
+
+    public function updateSettings(int $tenantId, string $timezone, string $currencyCode, string $numberFormat): void
+    {
+        $this->db->execute(
+            'UPDATE tenant_settings SET timezone = ?, currency_code = ?, number_format = ? WHERE tenant_id = ?',
+            [$timezone, $currencyCode, $numberFormat, $tenantId]
+        );
+    }
+
+    /** @param string|null $storedName nama berkas buatan server (bukan path); null menghapus logo */
+    public function setLogo(int $tenantId, ?string $storedName): void
+    {
+        $this->db->execute('UPDATE tenant_profiles SET logo_path = ? WHERE tenant_id = ?', [$storedName, $tenantId]);
+    }
+
     private static function uuid(): string
     {
         $b = random_bytes(16);

@@ -14,4 +14,6 @@ return [
     'debug' => Env::get('APP_DEBUG', 'false') === 'true',
     'timezone' => Env::get('APP_TIMEZONE', 'Asia/Jakarta'),
     'currency' => 'IDR',
+    // Logo tenant: di luar public/ dan hanya disajikan lewat GET /pengaturan/logo.
+    'uploads_path' => dirname(__DIR__) . '/storage/uploads/logos',
 ];

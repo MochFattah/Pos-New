@@ -56,8 +56,9 @@ final class Request
     /**
      * @param array<string, mixed> $data
      * @param array<string, string> $headers
+     * @param array<string, array<string, mixed>> $files struktur seperti $_FILES
      */
-    public static function create(string $method, string $uri, array $data = [], array $headers = []): self
+    public static function create(string $method, string $uri, array $data = [], array $headers = [], array $files = []): self
     {
         $query = [];
         $queryString = parse_url($uri, PHP_URL_QUERY);
@@ -71,7 +72,7 @@ final class Request
             $query,
             $data,
             array_change_key_case($headers, CASE_LOWER),
-            [],
+            $files,
             '127.0.0.1',
         );
     }

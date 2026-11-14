@@ -12,6 +12,7 @@ use App\Modules\Auth\Controllers\PasswordResetController;
 use App\Modules\Auth\Controllers\RegisterController;
 use App\Modules\Branches\Controllers\BranchController;
 use App\Modules\Roles\Controllers\RoleController;
+use App\Modules\Tenants\Controllers\SettingsController;
 use App\Modules\Users\Controllers\InvitationController;
 use App\Modules\Users\Controllers\UserController;
 
@@ -65,6 +66,13 @@ return static function (Router $router): void {
     $router->post('/role/{id}/izin', [RoleController::class, 'syncPermissions'], $guard('roles.manage'));
     $router->post('/role/{id}/nama', [RoleController::class, 'rename'], $guard('roles.manage'));
     $router->post('/role/{id}/hapus', [RoleController::class, 'delete'], $guard('roles.manage'));
+
+    $router->get('/pengaturan', [SettingsController::class, 'show'], $guard('tenant_settings.view'));
+    $router->post('/pengaturan', [SettingsController::class, 'update'], $guard('tenant_settings.manage'));
+    // Logo hanya milik tenant dari sesi; tanpa parameter pemilih tenant/berkas.
+    $router->get('/pengaturan/logo', [SettingsController::class, 'logo'], $guard('tenant_settings.view'));
+    $router->post('/pengaturan/logo', [SettingsController::class, 'uploadLogo'], $guard('tenant_settings.manage'));
+    $router->post('/pengaturan/logo/hapus', [SettingsController::class, 'removeLogo'], $guard('tenant_settings.manage'));
 
     $router->get('/bantuan', [HomeController::class, 'support']);
 };

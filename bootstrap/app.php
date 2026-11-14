@@ -48,7 +48,10 @@ use App\Modules\Tenants\DemoService;
 use App\Modules\Tenants\Repositories\RoleRepository;
 use App\Modules\Tenants\Repositories\TenantRepository;
 use App\Modules\Tenants\Repositories\UserRepository;
+use App\Modules\Tenants\Controllers\SettingsController;
+use App\Modules\Tenants\Services\LogoUploader;
 use App\Modules\Tenants\Services\RegisterTenantService;
+use App\Modules\Tenants\Services\TenantSettingsService;
 
 $basePath = dirname(__DIR__);
 
@@ -238,7 +241,17 @@ $buildRoleController = static function () use ($buildAuditLogger, $sharedDb, $sh
     );
 };
 
-$buildRouter = static function () use ($basePath, $buildGlobalMiddleware, $buildRegisterController, $buildAuthService, $buildPasswordResetController, $buildBranchController, $buildUserController, $buildInvitationController, $buildRoleController, $sharedDb, $sharedPolicy): Router {
+$buildSettingsController = static function () use ($buildAuditLogger, $sharedDb, $sharedPolicy, $basePath): SettingsController {
+    $db = $sharedDb();
+    $policy = $sharedPolicy();
+    $uploads = (string) Config::get('app.uploads_path', $basePath . '/storage/uploads/logos');
+    return new SettingsController(
+        new TenantSettingsService($db, new TenantRepository($db), new LogoUploader($uploads), $buildAuditLogger($db), $policy),
+        $policy
+    );
+};
+
+$buildRouter = static function () use ($basePath, $buildSettingsController, $buildGlobalMiddleware, $buildRegisterController, $buildAuthService, $buildPasswordResetController, $buildBranchController, $buildUserController, $buildInvitationController, $buildRoleController, $sharedDb, $sharedPolicy): Router {
     PermissionMiddleware::provide($sharedPolicy);
     // Resolver: controller yang butuh layanan dirakit lewat builder-nya; sisanya dibuat tanpa argumen.
     $router = new Router(static fn (string $class): object => match ($class) {
@@ -249,6 +262,7 @@ $buildRouter = static function () use ($basePath, $buildGlobalMiddleware, $build
         UserController::class => $buildUserController(),
         InvitationController::class => $buildInvitationController(),
         RoleController::class => $buildRoleController(),
+        SettingsController::class => $buildSettingsController(),
         HomeController::class => new HomeController(new DemoService($sharedDb()), (string) Config::get('app.support_email', '')),
         AuthMiddleware::class => new AuthMiddleware($buildAuthService()),
         AccessGateMiddleware::class => new AccessGateMiddleware(new DemoService($sharedDb())),
