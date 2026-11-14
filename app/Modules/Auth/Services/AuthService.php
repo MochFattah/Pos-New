@@ -125,6 +125,26 @@ final class AuthService
         return $this->loadUser($tenantId, $userId);
     }
 
+    /**
+     * Memperbarui sidik jari password di sesi yang sedang berjalan setelah password pengguna itu diganti
+     * di dalam sesi tersebut (mis. halaman ubah password), agar sesi ini tidak ikut tercabut sementara
+     * sesi lain tetap tercabut. Tidak berbuat apa-apa untuk sesi yang belum masuk atau pengguna nonaktif.
+     * Dipanggil SETELAH hash baru tersimpan.
+     */
+    public function refreshSessionFingerprint(Session $session): void
+    {
+        $userId = $session->get(self::SESSION_USER);
+        $tenantId = $session->get(self::SESSION_TENANT);
+        if (!is_int($userId) || !is_int($tenantId)) {
+            return;
+        }
+        $row = $this->users->findById($tenantId, $userId);
+        if ($row === null || $row['status'] !== 'active') {
+            return;
+        }
+        $session->set(self::SESSION_FINGERPRINT, self::fingerprint((string) $row['password_hash']));
+    }
+
     private function loadUser(int $tenantId, int $userId): ?AuthUser
     {
         $row = $this->users->findById($tenantId, $userId);

@@ -57,6 +57,21 @@ final class VerifyEmailService
         return $this->consume($plainToken, false, $newPassword);
     }
 
+    /** Token undangan masih bisa dipakai (non-Owner, pending, belum dipakai/kedaluwarsa). Tidak mengonsumsi token. */
+    public function isValidInvitation(string $plainToken): bool
+    {
+        if (preg_match('/^[a-f0-9]{64}$/D', $plainToken) !== 1) {
+            return false;
+        }
+        $now = gmdate('Y-m-d H:i:s', ($this->clock)());
+        $row = $this->verifications->findByHash($this->tokens->hash($plainToken));
+        if ($row === null || $row['used_at'] !== null || (string) $row['expires_at'] <= $now) {
+            return false;
+        }
+        $user = $this->users->findByIdAnyTenant((int) $row['user_id']);
+        return $user !== null && $user['status'] === 'pending_verification' && (int) $user['is_owner'] === 0;
+    }
+
     /** Respons netral: tidak ada efek (dan tidak ada sinyal) untuk email tak dikenal atau sudah terverifikasi. */
     public function resend(string $email, string $ip): void
     {

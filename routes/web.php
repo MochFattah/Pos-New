@@ -11,6 +11,9 @@ use App\Modules\Auth\Controllers\LoginController;
 use App\Modules\Auth\Controllers\PasswordResetController;
 use App\Modules\Auth\Controllers\RegisterController;
 use App\Modules\Branches\Controllers\BranchController;
+use App\Modules\Roles\Controllers\RoleController;
+use App\Modules\Users\Controllers\InvitationController;
+use App\Modules\Users\Controllers\UserController;
 
 return static function (Router $router): void {
     $router->get('/daftar', [RegisterController::class, 'showForm']);
@@ -39,6 +42,29 @@ return static function (Router $router): void {
     $router->post('/cabang/{id}', [BranchController::class, 'update'], $guard('branches.manage'));
     $router->post('/cabang/{id}/nonaktifkan', [BranchController::class, 'deactivate'], $guard('branches.manage'));
     $router->post('/cabang/{id}/aktifkan', [BranchController::class, 'activate'], $guard('branches.manage'));
+
+    $router->get('/undangan/{token}', [InvitationController::class, 'show']);
+    $router->post('/undangan/{token}', [InvitationController::class, 'accept']);
+
+    // Rute literal (/undang, /baru) harus lebih dulu dari rute {id}.
+    $router->get('/pengguna', [UserController::class, 'index'], $guard('users.view'));
+    $router->get('/pengguna/undang', [UserController::class, 'inviteForm'], $guard('users.manage'));
+    $router->post('/pengguna/undang', [UserController::class, 'invite'], $guard('users.manage'));
+    $router->get('/pengguna/{id}/ubah', [UserController::class, 'editForm'], $guard('users.manage'));
+    $router->post('/pengguna/{id}', [UserController::class, 'update'], $guard('users.manage'));
+    $router->post('/pengguna/{id}/nonaktifkan', [UserController::class, 'deactivate'], $guard('users.manage'));
+    $router->post('/pengguna/{id}/aktifkan', [UserController::class, 'activate'], $guard('users.manage'));
+    $router->post('/pengguna/{id}/role', [UserController::class, 'assignRoles'], $guard('users.manage'));
+    $router->post('/pengguna/{id}/cabang', [UserController::class, 'assignBranches'], $guard('users.manage'));
+    $router->post('/pengguna/{id}/kirim-ulang-undangan', [UserController::class, 'resendInvite'], $guard('users.manage'));
+
+    $router->get('/role', [RoleController::class, 'index'], $guard('roles.view'));
+    $router->get('/role/baru', [RoleController::class, 'createForm'], $guard('roles.manage'));
+    $router->post('/role', [RoleController::class, 'store'], $guard('roles.manage'));
+    $router->get('/role/{id}', [RoleController::class, 'show'], $guard('roles.view'));
+    $router->post('/role/{id}/izin', [RoleController::class, 'syncPermissions'], $guard('roles.manage'));
+    $router->post('/role/{id}/nama', [RoleController::class, 'rename'], $guard('roles.manage'));
+    $router->post('/role/{id}/hapus', [RoleController::class, 'delete'], $guard('roles.manage'));
 
     $router->get('/bantuan', [HomeController::class, 'support']);
 };

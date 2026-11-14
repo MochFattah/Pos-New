@@ -28,6 +28,13 @@ use App\Modules\Auth\Controllers\HomeController;
 use App\Modules\Branches\Controllers\BranchController;
 use App\Modules\Branches\Repositories\BranchRepository;
 use App\Modules\Branches\Services\BranchService;
+use App\Modules\Auth\Services\InvitationEmailSender;
+use App\Modules\Roles\Controllers\RoleController;
+use App\Modules\Roles\Repositories\PermissionRepository;
+use App\Modules\Roles\Services\RoleService;
+use App\Modules\Users\Controllers\InvitationController;
+use App\Modules\Users\Controllers\UserController;
+use App\Modules\Users\Services\UserService;
 use App\Modules\Auth\Controllers\LoginController;
 use App\Modules\Auth\Controllers\PasswordResetController;
 use App\Modules\Auth\Controllers\RegisterController;
@@ -86,7 +93,8 @@ $sharedDb = static function (): Connection {
 $limiterRetention = static fn (): int => max(
     (int) Config::get('security.login.window_seconds', 900),
     (int) Config::get('security.reset_request.window_seconds', 3600),
-    (int) Config::get('security.registration.window_seconds', 3600)
+    (int) Config::get('security.registration.window_seconds', 3600),
+    (int) Config::get('security.invitation_resend.window_seconds', 3600)
 );
 
 $buildRegisterController = static function () use ($buildAuditLogger, $sharedDb, $limiterRetention): RegisterController {
@@ -178,7 +186,59 @@ $buildBranchController = static function () use ($buildAuditLogger, $sharedDb, $
     return new BranchController(new BranchService($db, new BranchRepository($db), $policy, $buildAuditLogger($db), new AccessDeniedRecorder($buildAuditLogger($db))), $policy);
 };
 
-$buildRouter = static function () use ($basePath, $buildGlobalMiddleware, $buildRegisterController, $buildAuthService, $buildPasswordResetController, $buildBranchController, $sharedDb, $sharedPolicy): Router {
+$buildUserController = static function () use ($buildAuditLogger, $sharedDb, $sharedPolicy, $limiterRetention): UserController {
+    $db = $sharedDb();
+    $policy = $sharedPolicy();
+    $sender = new InvitationEmailSender(
+        new EmailVerificationRepository($db),
+        new TokenService(),
+        MailerFactory::fromConfig(),
+        (string) Config::get('app.url', ''),
+        (int) Config::get('security.invitation_token.ttl_seconds', 86400),
+        null,
+        Config::get('app.env', 'production') === 'production'
+    );
+    $resendLimiter = new RateLimiter(
+        $db,
+        (int) Config::get('security.invitation_resend.max_attempts', 3),
+        (int) Config::get('security.invitation_resend.window_seconds', 3600),
+        null,
+        $limiterRetention()
+    );
+    $service = new UserService(
+        $db,
+        new UserRepository($db),
+        new RoleRepository($db),
+        new BranchRepository($db),
+        $policy,
+        $buildAuditLogger($db),
+        new AccessDeniedRecorder($buildAuditLogger($db)),
+        $sender,
+        new PasswordHasher(),
+        $resendLimiter
+    );
+    return new UserController($service, $policy);
+};
+
+$buildInvitationController = static function () use ($buildAuditLogger, $sharedDb): InvitationController {
+    $db = $sharedDb();
+    $users = new UserRepository($db);
+    $verifications = new EmailVerificationRepository($db);
+    // Pengirim tak dipakai jalur ini (penerimaan undangan); VerifyEmailService memintanya untuk kirim ulang Owner.
+    $sender = new VerificationEmailSender($verifications, new TokenService(), MailerFactory::fromConfig(), (string) Config::get('app.url', ''), 86400);
+    return new InvitationController(new VerifyEmailService($db, $verifications, $users, new TenantRepository($db), new DemoService($db), $sender, $buildAuditLogger($db)));
+};
+
+$buildRoleController = static function () use ($buildAuditLogger, $sharedDb, $sharedPolicy): RoleController {
+    $db = $sharedDb();
+    $policy = $sharedPolicy();
+    return new RoleController(
+        new RoleService($db, new RoleRepository($db), new PermissionRepository($db), $policy, $buildAuditLogger($db), new AccessDeniedRecorder($buildAuditLogger($db))),
+        $policy
+    );
+};
+
+$buildRouter = static function () use ($basePath, $buildGlobalMiddleware, $buildRegisterController, $buildAuthService, $buildPasswordResetController, $buildBranchController, $buildUserController, $buildInvitationController, $buildRoleController, $sharedDb, $sharedPolicy): Router {
     PermissionMiddleware::provide($sharedPolicy);
     // Resolver: controller yang butuh layanan dirakit lewat builder-nya; sisanya dibuat tanpa argumen.
     $router = new Router(static fn (string $class): object => match ($class) {
@@ -186,6 +246,9 @@ $buildRouter = static function () use ($basePath, $buildGlobalMiddleware, $build
         LoginController::class => new LoginController($buildAuthService()),
         PasswordResetController::class => $buildPasswordResetController(),
         BranchController::class => $buildBranchController(),
+        UserController::class => $buildUserController(),
+        InvitationController::class => $buildInvitationController(),
+        RoleController::class => $buildRoleController(),
         HomeController::class => new HomeController(new DemoService($sharedDb()), (string) Config::get('app.support_email', '')),
         AuthMiddleware::class => new AuthMiddleware($buildAuthService()),
         AccessGateMiddleware::class => new AccessGateMiddleware(new DemoService($sharedDb())),

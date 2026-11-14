@@ -21,6 +21,12 @@ return [
         'max_attempts' => (int) Env::get('REGISTRATION_MAX_ATTEMPTS', '20'),
         'window_seconds' => (int) Env::get('REGISTRATION_WINDOW_SECONDS', '3600'),
     ],
+    // Kirim ulang undangan pengguna: per pengguna yang diundang.
+    'invitation_resend' => [
+        'max_attempts' => (int) Env::get('INVITATION_RESEND_MAX_ATTEMPTS', '3'),
+        'window_seconds' => (int) Env::get('INVITATION_RESEND_WINDOW_SECONDS', '3600'),
+    ],
+    'invitation_token' => ['ttl_seconds' => 86400],
     'reset_token' => ['ttl_seconds' => 3600],
     'verification_token' => ['ttl_seconds' => 86400],
     'session' => [

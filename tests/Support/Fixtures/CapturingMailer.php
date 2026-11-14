@@ -41,4 +41,14 @@ final class CapturingMailer implements MailerInterface
         }
         return $m[1];
     }
+
+    /** Token polos dari tautan undangan pengguna terakhir. */
+    public function lastInvitationToken(): string
+    {
+        $last = $this->sent[count($this->sent) - 1] ?? null;
+        if ($last === null || preg_match('#/undangan/([a-f0-9]{64})#', $last['body'], $m) !== 1) {
+            throw new \RuntimeException('Tidak ada tautan undangan.');
+        }
+        return $m[1];
+    }
 }

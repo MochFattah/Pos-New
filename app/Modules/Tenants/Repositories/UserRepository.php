@@ -85,6 +85,72 @@ class UserRepository
         $this->db->execute('UPDATE users SET last_login_at = ? WHERE tenant_id = ? AND id = ?', [$now, $tenantId, $userId]);
     }
 
+    /** @return list<array<string, mixed>> */
+    public function listByTenant(int $tenantId): array
+    {
+        return $this->db->query(
+            'SELECT id, name, email, phone, status, is_owner, last_login_at FROM users WHERE tenant_id = ? ORDER BY is_owner DESC, name ASC, id ASC',
+            [$tenantId]
+        );
+    }
+
+    /** Hanya nama dan telepon; email, status, is_owner, dan tenant tidak pernah diubah dari sini. */
+    public function updateProfile(int $tenantId, int $userId, string $name, ?string $phone, string $now): bool
+    {
+        return $this->db->execute(
+            'UPDATE users SET name = ?, phone = ?, updated_at = ? WHERE tenant_id = ? AND id = ?',
+            [$name, $phone, $now, $tenantId, $userId]
+        ) === 1;
+    }
+
+    /**
+     * Pindah antara active dan inactive (inactive juga dari pending_verification = mencabut undangan).
+     * Penjaga ada di SQL: Owner tidak pernah bisa dinonaktifkan dan akun yang belum pernah
+     * terverifikasi tidak bisa diaktifkan. Mengembalikan true hanya bila baris berubah.
+     */
+    public function setStatus(int $tenantId, int $userId, string $status, string $now): bool
+    {
+        if ($status === 'inactive') {
+            return $this->db->execute(
+                "UPDATE users SET status = 'inactive', updated_at = ? WHERE tenant_id = ? AND id = ? AND is_owner = 0 AND status <> 'inactive'",
+                [$now, $tenantId, $userId]
+            ) === 1;
+        }
+        if ($status === 'active') {
+            return $this->db->execute(
+                "UPDATE users SET status = 'active', updated_at = ? WHERE tenant_id = ? AND id = ? AND status = 'inactive' AND email_verified_at IS NOT NULL",
+                [$now, $tenantId, $userId]
+            ) === 1;
+        }
+        throw new \InvalidArgumentException('Status tidak didukung: ' . $status);
+    }
+
+    /** @return list<int> */
+    public function branchIds(int $tenantId, int $userId): array
+    {
+        $rows = $this->db->query(
+            'SELECT branch_id FROM user_branch_access WHERE tenant_id = ? AND user_id = ? ORDER BY branch_id',
+            [$tenantId, $userId]
+        );
+        return array_map(static fn (array $r): int => (int) $r['branch_id'], $rows);
+    }
+
+    public function addBranch(int $tenantId, int $userId, int $branchId): void
+    {
+        $this->db->execute(
+            'INSERT INTO user_branch_access (user_id, branch_id, tenant_id) VALUES (?, ?, ?)',
+            [$userId, $branchId, $tenantId]
+        );
+    }
+
+    public function removeBranch(int $tenantId, int $userId, int $branchId): void
+    {
+        $this->db->execute(
+            'DELETE FROM user_branch_access WHERE tenant_id = ? AND user_id = ? AND branch_id = ?',
+            [$tenantId, $userId, $branchId]
+        );
+    }
+
     private static function isDuplicateEmail(PDOException $e): bool
     {
         $state = (string) ($e->errorInfo[0] ?? $e->getCode());
