@@ -11,6 +11,12 @@ return [
         // Agregat per IP (semua email) untuk menahan password spraying.
         'ip_max_attempts' => (int) Env::get('LOGIN_IP_MAX_ATTEMPTS', '50'),
     ],
+    // Login Super Admin: per (email, IP) dan agregat per IP; namespace identifier terpisah dari tenant.
+    'platform_login' => [
+        'max_attempts' => (int) Env::get('PLATFORM_LOGIN_MAX_ATTEMPTS', '5'),
+        'window_seconds' => (int) Env::get('PLATFORM_LOGIN_WINDOW_SECONDS', '900'),
+        'ip_max_attempts' => (int) Env::get('PLATFORM_LOGIN_IP_MAX_ATTEMPTS', '20'),
+    ],
     // Permintaan tautan reset: per (email, IP) dan per IP.
     'reset_request' => [
         'max_attempts' => (int) Env::get('RESET_REQUEST_MAX_ATTEMPTS', '5'),

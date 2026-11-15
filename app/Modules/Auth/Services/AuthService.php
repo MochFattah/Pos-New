@@ -84,6 +84,8 @@ final class AuthService
         }
 
         $this->limiter->clear($email, $ip);
+        // Satu cookie, dua sisi: masuk sebagai tenant menghapus identitas platform (tak ada pencampuran hak akses).
+        \App\Modules\Platform\Services\PlatformAuthService::forgetKeys($session);
         $session->regenerate();
         $session->set(self::SESSION_USER, $authUser->id);
         $session->set(self::SESSION_TENANT, $authUser->tenantId);

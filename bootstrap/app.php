@@ -24,6 +24,11 @@ use App\Core\Mail\MailerFactory;
 use App\Core\Security\PasswordHasher;
 use App\Core\Security\RateLimiter;
 use App\Core\Security\TokenService;
+use App\Core\Middleware\PlatformAuthMiddleware;
+use App\Modules\Platform\Controllers\PlatformAuthController;
+use App\Modules\Platform\Controllers\PlatformDashboardController;
+use App\Modules\Platform\Repositories\PlatformUserRepository;
+use App\Modules\Platform\Services\PlatformAuthService;
 use App\Modules\Auth\Controllers\HomeController;
 use App\Modules\Branches\Controllers\BranchController;
 use App\Modules\Branches\Repositories\BranchRepository;
@@ -97,7 +102,8 @@ $limiterRetention = static fn (): int => max(
     (int) Config::get('security.login.window_seconds', 900),
     (int) Config::get('security.reset_request.window_seconds', 3600),
     (int) Config::get('security.registration.window_seconds', 3600),
-    (int) Config::get('security.invitation_resend.window_seconds', 3600)
+    (int) Config::get('security.invitation_resend.window_seconds', 3600),
+    (int) Config::get('security.platform_login.window_seconds', 900)
 );
 
 $buildRegisterController = static function () use ($buildAuditLogger, $sharedDb, $limiterRetention): RegisterController {
@@ -145,6 +151,19 @@ $buildAuthService = static function () use ($buildAuditLogger, $sharedDb, $limit
         new UserRepository($db),
         new RateLimiter($db, (int) Config::get('security.login.max_attempts', 5), $window, null, $limiterRetention()),
         new RateLimiter($db, (int) Config::get('security.login.ip_max_attempts', 50), $window, null, $limiterRetention()),
+        new PasswordHasher(),
+        $buildAuditLogger($db)
+    );
+};
+
+$buildPlatformAuthService = static function () use ($buildAuditLogger, $sharedDb, $limiterRetention): PlatformAuthService {
+    $db = $sharedDb();
+    $window = (int) Config::get('security.platform_login.window_seconds', 900);
+    return new PlatformAuthService(
+        $db,
+        new PlatformUserRepository($db),
+        new RateLimiter($db, (int) Config::get('security.platform_login.max_attempts', 5), $window, null, $limiterRetention()),
+        new RateLimiter($db, (int) Config::get('security.platform_login.ip_max_attempts', 20), $window, null, $limiterRetention()),
         new PasswordHasher(),
         $buildAuditLogger($db)
     );
@@ -251,7 +270,7 @@ $buildSettingsController = static function () use ($buildAuditLogger, $sharedDb,
     );
 };
 
-$buildRouter = static function () use ($basePath, $buildSettingsController, $buildGlobalMiddleware, $buildRegisterController, $buildAuthService, $buildPasswordResetController, $buildBranchController, $buildUserController, $buildInvitationController, $buildRoleController, $sharedDb, $sharedPolicy): Router {
+$buildRouter = static function () use ($basePath, $buildSettingsController, $buildGlobalMiddleware, $buildRegisterController, $buildAuthService, $buildPlatformAuthService, $buildPasswordResetController, $buildBranchController, $buildUserController, $buildInvitationController, $buildRoleController, $sharedDb, $sharedPolicy): Router {
     PermissionMiddleware::provide($sharedPolicy);
     // Resolver: controller yang butuh layanan dirakit lewat builder-nya; sisanya dibuat tanpa argumen.
     $router = new Router(static fn (string $class): object => match ($class) {
@@ -265,6 +284,9 @@ $buildRouter = static function () use ($basePath, $buildSettingsController, $bui
         SettingsController::class => $buildSettingsController(),
         HomeController::class => new HomeController(new DemoService($sharedDb()), (string) Config::get('app.support_email', '')),
         AuthMiddleware::class => new AuthMiddleware($buildAuthService()),
+        PlatformAuthController::class => new PlatformAuthController($buildPlatformAuthService()),
+        PlatformDashboardController::class => new PlatformDashboardController(),
+        PlatformAuthMiddleware::class => new PlatformAuthMiddleware($buildPlatformAuthService()),
         AccessGateMiddleware::class => new AccessGateMiddleware(new DemoService($sharedDb())),
         default => new $class(),
     });
@@ -272,6 +294,7 @@ $buildRouter = static function () use ($basePath, $buildSettingsController, $bui
         $router->addGlobalMiddleware($middleware);
     }
     (require $basePath . '/routes/web.php')($router);
+    (require $basePath . '/routes/platform.php')($router);
     return $router;
 };
 
