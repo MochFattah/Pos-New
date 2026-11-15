@@ -1,0 +1,46 @@
+@layer components {
+    .field-group { display: flex; flex-direction: column; gap: var(--space-1); }
+    .field-label { font-size: var(--text-label); line-height: var(--text-label--line-height); font-weight: var(--weight-medium); color: var(--color-text-primary); }
+    .field-hint { font-size: var(--text-caption); line-height: var(--text-caption--line-height); color: var(--color-text-secondary); }
+
+    .field {
+        display: block;
+        width: 100%;
+        min-height: var(--touch-target);
+        padding: var(--space-2) var(--space-3);
+        background: var(--color-surface);
+        color: var(--color-text-primary);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        font-size: var(--text-body);
+        line-height: var(--text-body--line-height);
+    }
+    .field::placeholder { color: var(--color-text-secondary); opacity: 1; }
+    .field:hover:not(:disabled):not([readonly]) { border-color: var(--color-text-muted); }
+    .field:focus-visible { border-color: var(--color-primary); outline: 3px solid var(--color-focus-ring); outline-offset: 1px; }
+    .field:disabled { background: var(--color-surface-muted); color: var(--color-text-secondary); cursor: not-allowed; }
+    .field[readonly] { background: transparent; border-style: dashed; }
+    .field[aria-invalid="true"] { border-color: var(--color-danger); border-width: 2px; }
+    textarea.field { min-height: 6rem; resize: vertical; }
+
+    .field-error {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-1);
+        font-size: var(--text-body-sm);
+        line-height: var(--text-body-sm--line-height);
+        color: var(--color-danger);
+    }
+    .field-error::before { content: "!"; flex: none; width: 1.1em; height: 1.1em; margin-top: 0.2em; border-radius: var(--radius-full); background: var(--color-danger); color: var(--color-on-danger); font-size: 0.75em; font-weight: var(--weight-semibold); line-height: 1.1em; text-align: center; }
+
+    .error-summary {
+        padding: var(--space-4);
+        background: var(--color-danger-subtle);
+        color: var(--color-text-primary);
+        border: 1px solid var(--color-danger);
+        border-radius: var(--radius-md);
+    }
+    .error-summary__title { font-weight: var(--weight-semibold); color: var(--color-danger); }
+
+    .check { display: flex; align-items: center; gap: var(--space-3); min-height: var(--touch-target); }
+}

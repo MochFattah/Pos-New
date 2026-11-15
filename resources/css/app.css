@@ -1,0 +1,106 @@
+/*
+ * Entri Tailwind 4 (dikompilasi lokal oleh scripts/build-css.mjs, tanpa CDN).
+ * Token berasal dari tokens.css; @theme inline hanya memetakannya ke utilitas
+ * (bg-primary, text-text-muted, rounded-md, ...) tanpa menyalin nilai.
+ */
+@import "tailwindcss";
+@import "./tokens.css";
+
+@theme inline {
+    --color-*: initial;
+    --color-primary: var(--color-primary);
+    --color-primary-hover: var(--color-primary-hover);
+    --color-primary-subtle: var(--color-primary-subtle);
+    --color-background: var(--color-background);
+    --color-surface: var(--color-surface);
+    --color-surface-muted: var(--color-surface-muted);
+    --color-text-primary: var(--color-text-primary);
+    --color-text-secondary: var(--color-text-secondary);
+    --color-text-muted: var(--color-text-muted);
+    --color-border: var(--color-border);
+    --color-success: var(--color-success);
+    --color-success-subtle: var(--color-success-subtle);
+    --color-warning: var(--color-warning);
+    --color-warning-subtle: var(--color-warning-subtle);
+    --color-danger: var(--color-danger);
+    --color-danger-subtle: var(--color-danger-subtle);
+    --color-info: var(--color-info);
+    --color-info-subtle: var(--color-info-subtle);
+    --color-on-primary: var(--color-on-primary);
+    --color-on-danger: var(--color-on-danger);
+
+    --radius-*: initial;
+    --radius-sm: var(--radius-sm);
+    --radius-md: var(--radius-md);
+    --radius-lg: var(--radius-lg);
+    --radius-xl: var(--radius-xl);
+    --radius-full: var(--radius-full);
+
+    --font-sans: var(--font-sans);
+}
+
+@layer base {
+    html {
+        font-family: var(--font-sans);
+        font-size: 100%;
+        -webkit-text-size-adjust: 100%;
+        scroll-padding-top: 4rem;
+    }
+
+    body {
+        margin: 0;
+        background: var(--color-background);
+        color: var(--color-text-primary);
+        font-size: var(--text-body);
+        line-height: var(--text-body--line-height);
+        font-weight: var(--weight-regular);
+        font-variant-numeric: tabular-nums;
+    }
+
+    h1, h2, h3 { margin: 0; font-weight: var(--weight-semibold); color: var(--color-text-primary); }
+    h1 { font-size: var(--text-h1); line-height: var(--text-h1--line-height); }
+    h2 { font-size: var(--text-h2); line-height: var(--text-h2--line-height); }
+    h3 { font-size: var(--text-h3); line-height: var(--text-h3--line-height); }
+    p { margin: 0; }
+
+    a { color: var(--color-primary); text-underline-offset: 0.2em; }
+
+    small, .caption { font-size: var(--text-caption); line-height: var(--text-caption--line-height); color: var(--color-text-muted); }
+
+    :focus-visible {
+        outline: 3px solid var(--color-focus-ring);
+        outline-offset: 2px;
+    }
+
+    ::selection { background: var(--color-primary-subtle); color: var(--color-text-primary); }
+
+    /* Target sentuh minimal 44 x 44 px untuk kontrol utama (DESAIN.md 8.1). */
+    button, [role="button"], input:not([type="checkbox"]):not([type="radio"]), select, summary {
+        min-height: var(--touch-target);
+    }
+    input[type="checkbox"], input[type="radio"] {
+        width: 1.25rem;
+        height: 1.25rem;
+        accent-color: var(--color-primary);
+    }
+    button, select, input, textarea { font: inherit; color: inherit; }
+
+    @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            scroll-behavior: auto !important;
+            transition-duration: 0.01ms !important;
+        }
+    }
+}
+
+@import "./components/skip-link.css";
+@import "./components/layout.css";
+@import "./components/button.css";
+@import "./components/form.css";
+@import "./components/badge.css";
+@import "./components/table.css";
+@import "./components/overlay.css";
+@import "./components/feedback.css";
+@import "./components/nav.css";

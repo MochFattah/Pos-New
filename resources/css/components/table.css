@@ -1,0 +1,12 @@
+@layer components {
+    .table-wrap { overflow-x: auto; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+    .table-data { width: 100%; border-collapse: collapse; font-size: var(--text-body-sm); line-height: var(--text-body-sm--line-height); }
+    .table-data caption { padding: var(--space-3) var(--space-4); text-align: start; font-weight: var(--weight-semibold); }
+    .table-data th, .table-data td { padding: var(--space-3) var(--space-4); text-align: start; vertical-align: middle; border-bottom: 1px solid var(--color-border); }
+    .table-data thead th { background: var(--color-surface-muted); color: var(--color-text-secondary); font-weight: var(--weight-medium); white-space: nowrap; }
+    .table-data tbody th { font-weight: var(--weight-medium); }
+    .table-data tbody tr:last-child > * { border-bottom: 0; }
+    .table-data tbody tr:hover { background: var(--color-surface-muted); }
+    .table-data tr[aria-selected="true"] { background: var(--color-primary-subtle); }
+    .table-data .num { text-align: end; font-variant-numeric: tabular-nums; }
+}
