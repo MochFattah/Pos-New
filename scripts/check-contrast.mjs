@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // Hitung rasio kontras WCAG 2.x dari token di resources/css/tokens.css (terang dan gelap).
 // Pasangan yang gagal tetapi tercatat di scripts/contrast-known-failures.json dilaporkan
-// sebagai "known" dan tidak menggagalkan exit code; kegagalan baru menghasilkan exit 1.
-// Pakai: node scripts/check-contrast.mjs [--json]
+// sebagai "KNOWN" dan tidak menggagalkan exit code, selama rasio sekarang tidak lebih rendah
+// dari ratioAtListing. Kegagalan baru atau yang memburuk (WORSENED) menghasilkan exit 1.
+// Entri usang (pasangan sudah lulus) dicetak sebagai PERINGATAN.
+// Pakai: node scripts/check-contrast.mjs [--json] [--known=<berkas allowlist>]
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,7 +20,7 @@ function block(selector) {
     const open = css.indexOf('{', at);
     const close = css.indexOf('}', open);
     const vars = {};
-    for (const m of css.slice(open + 1, close).matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) vars[m[1]] = m[2].trim();
+    for (const m of css.slice(open + 1, close).matchAll(/((?:--[\w-]+)|color-scheme)\s*:\s*([^;]+);/g)) vars[m[1]] = m[2].trim();
     return vars;
 }
 
@@ -26,10 +28,9 @@ const light = block(':root');
 const darkAttr = block(':root[data-theme="dark"]');
 const darkMedia = block(':root:not([data-theme="light"])');
 
-const colorKeys = (v) => Object.keys(v).filter((k) => k.startsWith('--color-')).sort();
-if (JSON.stringify(colorKeys(darkAttr)) !== JSON.stringify(colorKeys(darkMedia))
-    || colorKeys(darkAttr).some((k) => darkAttr[k] !== darkMedia[k])) {
-    console.error('GAGAL: blok tema gelap [data-theme="dark"] dan prefers-color-scheme tidak identik.');
+const same = (a, b) => JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
+if (!same(darkAttr, darkMedia)) {
+    console.error('GAGAL: blok tema gelap [data-theme="dark"] dan prefers-color-scheme tidak identik (semua properti, termasuk --shadow-overlay, --scrim, color-scheme).');
     process.exit(1);
 }
 const themes = { light, dark: { ...light, ...darkAttr } };
@@ -64,14 +65,17 @@ add('on-primary on primary-hover', 'tombol primary', 4.5, 'on-primary', 'primary
 add('on-danger on danger', 'tombol danger', 4.5, 'on-danger', 'danger');
 add('on-danger on danger (hover, campuran 18% text-primary)', 'tombol danger', 4.5, 'on-danger', { mix: ['danger', 'text-primary', 0.18] });
 for (const b of ['background', 'surface', 'primary-subtle']) add(`primary (tautan/nav aktif) on ${b}`, 'tautan', 4.5, 'primary', b);
+add('primary (tautan/nav aktif) on surface-muted', 'tautan', 4.5, 'primary', 'surface-muted');
 for (const s of ['success', 'warning', 'danger', 'info']) {
     add(`${s} on ${s}-subtle`, 'status', 4.5, s, `${s}-subtle`);
-    add(`${s} on surface`, 'status', 4.5, s, 'surface');
+    for (const b of bgs) add(`${s} on ${b}`, 'status', 4.5, s, b);
+    for (const t of ['text-primary', 'text-secondary']) add(`${t} on ${s}-subtle`, 'status', 4.5, t, `${s}-subtle`);
 }
 for (const b of ['background', 'surface', 'surface-muted']) add(`border on ${b}`, 'non-teks', 3, 'border', b, 'WCAG 1.4.11 untuk border input');
 for (const b of ['background', 'surface', 'surface-muted', 'primary-subtle']) add(`focus-ring on ${b}`, 'non-teks', 3, 'focus-ring', b);
 
-const knownPath = join(root, 'scripts/contrast-known-failures.json');
+const knownArg = process.argv.find((a) => a.startsWith('--known='));
+const knownPath = knownArg ? knownArg.slice(8) : join(root, 'scripts/contrast-known-failures.json');
 const known = existsSync(knownPath) ? JSON.parse(readFileSync(knownPath, 'utf8')).failures : [];
 const isKnown = (theme, id) => known.find((k) => k.theme === theme && k.id === id);
 
@@ -82,11 +86,14 @@ for (const [theme, vars] of Object.entries(themes)) {
     for (const p of pairs) {
         const r = ratio(val(p.fg), val(p.bg));
         const pass = r >= p.min;
+        const r2 = Math.round(r * 100) / 100;
         const k = pass ? null : isKnown(theme, p.id);
-        rows.push({ theme, id: p.id, group: p.group, min: p.min, ratio: Math.round(r * 100) / 100, status: pass ? 'PASS' : (k ? 'KNOWN' : 'FAIL') });
+        let status = 'PASS';
+        if (!pass) status = !k ? 'FAIL' : (typeof k.ratioAtListing !== 'number' || r2 < k.ratioAtListing ? 'WORSENED' : 'KNOWN');
+        rows.push({ theme, id: p.id, group: p.group, min: p.min, ratio: r2, status });
     }
 }
-const stale = known.filter((k) => !rows.some((r) => r.theme === k.theme && r.id === k.id && r.status === 'KNOWN'));
+const stale = known.filter((k) => !rows.some((r) => r.theme === k.theme && r.id === k.id && (r.status === 'KNOWN' || r.status === 'WORSENED')));
 
 if (asJson) {
     console.log(JSON.stringify({ rows, stale }, null, 2));
@@ -100,9 +107,10 @@ if (asJson) {
     const knownRows = rows.filter((r) => r.status === 'KNOWN');
     if (knownRows.length) {
         console.log('\n!!! KEGAGALAN TERCATAT (menunggu keputusan pemilik proyek) !!!');
-        for (const r of knownRows) console.log(`  [${r.theme}] ${r.id}: ${r.ratio.toFixed(2)} < ${r.min}  -- ${isKnown(r.theme, r.id).reason}`);
+        for (const r of knownRows) console.log(`  [${r.theme}] ${r.id}: ${r.ratio.toFixed(2)} < ${r.min} (tercatat ${isKnown(r.theme, r.id).ratioAtListing})  -- ${isKnown(r.theme, r.id).reason}`);
     }
-    for (const k of stale) console.log(`PERINGATAN: entri allowlist tidak lagi gagal atau tidak dikenal: [${k.theme}] ${k.id}`);
-    console.log(`\nTotal ${rows.length}: ${count('PASS')} lulus, ${count('KNOWN')} gagal tercatat, ${count('FAIL')} gagal BARU`);
+    for (const r of rows.filter((x) => x.status === 'WORSENED')) console.log(`GAGAL: kegagalan tercatat MEMBURUK: [${r.theme}] ${r.id}: ${r.ratio.toFixed(2)} < ratioAtListing ${isKnown(r.theme, r.id).ratioAtListing}`);
+    for (const k of stale) console.log(`PERINGATAN: entri allowlist USANG (pasangan sudah lulus atau tidak ada lagi), hapus dari contrast-known-failures.json: [${k.theme}] ${k.id}`);
+    console.log(`\nTotal ${rows.length}: ${count('PASS')} lulus, ${count('KNOWN')} gagal tercatat, ${count('WORSENED')} memburuk, ${count('FAIL')} gagal BARU`);
 }
-process.exit(rows.some((r) => r.status === 'FAIL') ? 1 : 0);
+process.exit(rows.some((r) => r.status === 'FAIL' || r.status === 'WORSENED') ? 1 : 0);

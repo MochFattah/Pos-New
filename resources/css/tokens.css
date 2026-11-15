@@ -11,21 +11,21 @@
     font-style: normal;
     font-weight: 400;
     font-display: swap;
-    src: local("Inter Regular"), local("Inter-Regular"), url("/assets/fonts/Inter-Regular.woff") format("woff");
+    src: url("/assets/fonts/Inter-Regular.woff") format("woff");
 }
 @font-face {
     font-family: "Inter";
     font-style: normal;
     font-weight: 500;
     font-display: swap;
-    src: local("Inter Medium"), local("Inter-Medium"), url("/assets/fonts/Inter-Medium.woff") format("woff");
+    src: url("/assets/fonts/Inter-Medium.woff") format("woff");
 }
 @font-face {
     font-family: "Inter";
     font-style: normal;
     font-weight: 600;
     font-display: swap;
-    src: local("Inter SemiBold"), local("Inter-SemiBold"), url("/assets/fonts/Inter-SemiBold.woff") format("woff");
+    src: url("/assets/fonts/Inter-SemiBold.woff") format("woff");
 }
 
 :root {

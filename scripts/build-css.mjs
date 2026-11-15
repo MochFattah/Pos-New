@@ -2,7 +2,9 @@
 // Kompilasi resources/css/app.css dengan API Node tailwindcss lokal (tanpa CLI, tanpa jaringan).
 // Kandidat kelas dipindai dari resources/views/**/*.php dan resources/js/**/*.js.
 // Lokasi paket: require.resolve (cwd/proyek), TAILWIND_MODULES, NODE_PATH, root global npm, /opt/npm-tools.
-// Pakai: node scripts/build-css.mjs [--no-minify]
+// Pakai: node scripts/build-css.mjs [--no-minify] [--out=<berkas>]
+// Batas: minifier berbasis regex tidak memahami string; spasi ganda atau karakter { } ; , > di dalam
+// string/content CSS ikut dirapatkan. Hindari pola itu di literal string (atau ganti dengan minifier sungguhan).
 import { createRequire } from 'node:module';
 import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join, resolve, delimiter } from 'node:path';
@@ -82,12 +84,15 @@ if (minify) {
         .trim() + '\n';
 }
 
-if (/https?:\/\//i.test(out)) {
-    console.error('Keluaran memuat URL eksternal; build ditolak.');
+// Hanya url(...) dan @import yang dihitung; URL di komentar (mis. banner lisensi Tailwind) diabaikan.
+const noComments = out.replace(/\/\*[\s\S]*?\*\//g, '');
+if (/url\(\s*['"]?\s*(?:https?:)?\/\//i.test(noComments) || /@import\s+(?:url\(\s*)?['"]?\s*(?:https?:)?\/\//i.test(noComments)) {
+    console.error('Keluaran memuat url()/@import eksternal; build ditolak.');
     process.exit(1);
 }
 
-const target = join(root, 'public/assets/css/app.css');
+const outArg = process.argv.find((a) => a.startsWith('--out='));
+const target = outArg ? resolve(outArg.slice(6)) : join(root, 'public/assets/css/app.css');
 mkdirSync(dirname(target), { recursive: true });
 writeFileSync(target, out);
 console.log(`OK ${target} (${out.length} byte, ${candidates.size} kandidat dipindai)`);

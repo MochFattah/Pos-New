@@ -54,7 +54,6 @@
         font-size: var(--text-body);
         line-height: var(--text-body--line-height);
         font-weight: var(--weight-regular);
-        font-variant-numeric: tabular-nums;
     }
 
     h1, h2, h3 { margin: 0; font-weight: var(--weight-semibold); color: var(--color-text-primary); }

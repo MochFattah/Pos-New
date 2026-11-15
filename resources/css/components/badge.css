@@ -10,7 +10,13 @@
         font-weight: var(--weight-medium);
         white-space: nowrap;
     }
-    /* Selalu sertakan teks status; warna bukan satu-satunya pembeda (DESAIN.md 2.3). */
+    /* Selalu sertakan teks status; warna bukan satu-satunya pembeda (DESAIN.md 2.3). Glyph ::before
+       menambah pembeda bentuk (dekoratif; teks status tetap menjadi label yang dibaca). */
+    .badge-success::before, .badge-warning::before, .badge-danger::before, .badge-info::before { flex: none; font-weight: var(--weight-semibold); }
+    .badge-success::before { content: "\2713"; }
+    .badge-warning::before { content: "\25B2"; font-size: 0.7em; }
+    .badge-danger::before { content: "\2715"; }
+    .badge-info::before { content: "i"; font-style: italic; font-family: serif; }
     .badge-success { background: var(--color-success-subtle); color: var(--color-success); }
     .badge-warning { background: var(--color-warning-subtle); color: var(--color-warning); }
     .badge-danger { background: var(--color-danger-subtle); color: var(--color-danger); }

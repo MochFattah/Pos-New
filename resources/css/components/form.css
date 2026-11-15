@@ -42,5 +42,9 @@
     }
     .error-summary__title { font-weight: var(--weight-semibold); color: var(--color-danger); }
 
-    .check { display: flex; align-items: center; gap: var(--space-3); min-height: var(--touch-target); }
+    /* Bungkus checkbox/radio dengan <label class="check">: label menjadi area sentuh >= 44 px (DESAIN.md 8.1),
+       kotak 20 px di dalamnya hanya penanda visual. */
+    .check { display: flex; align-items: center; gap: var(--space-3); min-height: var(--touch-target); min-width: var(--touch-target); cursor: pointer; }
+    .check > input[type="checkbox"], .check > input[type="radio"] { flex: none; margin: 0; }
+    .check:has(> input:disabled) { cursor: not-allowed; color: var(--color-text-secondary); }
 }

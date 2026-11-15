@@ -9,4 +9,6 @@
     .table-data tbody tr:hover { background: var(--color-surface-muted); }
     .table-data tr[aria-selected="true"] { background: var(--color-primary-subtle); }
     .table-data .num { text-align: end; font-variant-numeric: tabular-nums; }
+    /* Angka tabular hanya untuk uang, kuantitas, SKU, nomor transaksi (DESAIN.md 3.3), bukan seluruh body. */
+    .tabular { font-variant-numeric: tabular-nums; }
 }

@@ -1,53 +1,68 @@
 {
-  "note": "Kegagalan kontras yang berasal langsung dari nilai DESAIN.md dan belum diputuskan pemilik. Hanya pasangan baru yang menggagalkan check-contrast.",
+  "note": "Kegagalan kontras yang berasal langsung dari nilai DESAIN.md dan belum diputuskan pemilik. ratioAtListing = rasio saat dicatat; skrip exit 1 bila rasio sekarang lebih rendah (memburuk). Entri usang (sudah lulus) dicetak sebagai peringatan.",
   "failures": [
     {
       "theme": "light",
       "id": "text-muted on background",
       "reason": "Token text-muted (#68778A) di bawah 4.5:1; DESAIN.md 2.1 mewajibkan caption/metadata lolos kontras. Usulan: gelapkan text-muted (mis. #5E6C80).",
-      "status": "awaiting owner decision"
+      "status": "awaiting owner decision",
+      "ratioAtListing": 4.3
     },
     {
       "theme": "light",
       "id": "text-muted on surface-muted",
       "reason": "Token text-muted (#68778A) di bawah 4.5:1; DESAIN.md 2.1 mewajibkan caption/metadata lolos kontras. Usulan: gelapkan text-muted (mis. #5E6C80).",
-      "status": "awaiting owner decision"
+      "status": "awaiting owner decision",
+      "ratioAtListing": 4.11
+    },
+    {
+      "theme": "light",
+      "id": "success on surface-muted",
+      "reason": "Token success terang (#16804A) 4.48:1 di atas surface-muted (#F1F3F6), tepat di bawah 4.5:1; terlihat bila teks/ikon status ditaruh di permukaan muted (mis. baris tabel selang-seling). Usulan: gelapkan success sedikit (mis. #157A46).",
+      "status": "awaiting owner decision",
+      "ratioAtListing": 4.48
     },
     {
       "theme": "light",
       "id": "border on background",
       "reason": "Token border dipakai juga untuk border input/kontrol; WCAG 1.4.11 butuh 3:1. Usulan: token terpisah border-strong untuk kontrol (divider dekoratif boleh tetap).",
-      "status": "awaiting owner decision"
+      "status": "awaiting owner decision",
+      "ratioAtListing": 1.23
     },
     {
       "theme": "light",
       "id": "border on surface",
       "reason": "Token border dipakai juga untuk border input/kontrol; WCAG 1.4.11 butuh 3:1. Usulan: token terpisah border-strong untuk kontrol (divider dekoratif boleh tetap).",
-      "status": "awaiting owner decision"
+      "status": "awaiting owner decision",
+      "ratioAtListing": 1.3
     },
     {
       "theme": "light",
       "id": "border on surface-muted",
       "reason": "Token border dipakai juga untuk border input/kontrol; WCAG 1.4.11 butuh 3:1. Usulan: token terpisah border-strong untuk kontrol (divider dekoratif boleh tetap).",
-      "status": "awaiting owner decision"
+      "status": "awaiting owner decision",
+      "ratioAtListing": 1.17
     },
     {
       "theme": "dark",
       "id": "border on background",
       "reason": "Token border dipakai juga untuk border input/kontrol; WCAG 1.4.11 butuh 3:1. Usulan: token terpisah border-strong untuk kontrol (divider dekoratif boleh tetap).",
-      "status": "awaiting owner decision"
+      "status": "awaiting owner decision",
+      "ratioAtListing": 1.76
     },
     {
       "theme": "dark",
       "id": "border on surface",
       "reason": "Token border dipakai juga untuk border input/kontrol; WCAG 1.4.11 butuh 3:1. Usulan: token terpisah border-strong untuk kontrol (divider dekoratif boleh tetap).",
-      "status": "awaiting owner decision"
+      "status": "awaiting owner decision",
+      "ratioAtListing": 1.57
     },
     {
       "theme": "dark",
       "id": "border on surface-muted",
       "reason": "Token border dipakai juga untuk border input/kontrol; WCAG 1.4.11 butuh 3:1. Usulan: token terpisah border-strong untuk kontrol (divider dekoratif boleh tetap).",
-      "status": "awaiting owner decision"
+      "status": "awaiting owner decision",
+      "ratioAtListing": 1.36
     }
   ]
 }

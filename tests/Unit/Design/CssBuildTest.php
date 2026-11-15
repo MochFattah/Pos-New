@@ -39,15 +39,25 @@ final class CssBuildTest extends TestCase
         $this->assertSame(0, preg_match('~https?://~i', $this->css()), 'CSS tidak boleh memuat URL eksternal');
     }
 
+    private function node(): string
+    {
+        return trim((string) shell_exec('command -v node 2>/dev/null'));
+    }
+
     public function testBuiltCssIsFresh(): void
     {
-        $built = filemtime($this->root . '/public/assets/css/app.css');
-        $sources = array_merge([$this->root . '/resources/css/app.css', $this->root . '/resources/css/tokens.css'],
-            glob($this->root . '/resources/css/components/*.css') ?: []);
-        foreach ($sources as $src) {
-            // Toleransi 2 detik agar checkout git (mtime seragam) tidak gagal.
-            $this->assertTrue(filemtime($src) <= $built + 2, basename($src) . ' lebih baru dari CSS hasil build; jalankan node scripts/build-css.mjs');
+        $node = $this->node();
+        if ($node === '') {
+            echo "  (dilewati: node tidak tersedia, kesegaran CSS tidak diperiksa)\n";
+            $this->assertTrue(true);
+            return;
         }
+        $tmp = tempnam(sys_get_temp_dir(), 'css');
+        exec(escapeshellarg($node) . ' ' . escapeshellarg($this->root . '/scripts/build-css.mjs') . ' --out=' . escapeshellarg($tmp) . ' 2>&1', $out, $code);
+        $this->assertSame(0, $code, 'build ke berkas sementara gagal: ' . implode("\n", array_slice($out, -5)));
+        $same = file_get_contents($tmp) === file_get_contents($this->root . '/public/assets/css/app.css');
+        @unlink($tmp);
+        $this->assertTrue($same, 'public/assets/css/app.css usang; jalankan node scripts/build-css.mjs dan komit hasilnya');
     }
 
     public function testContrastCheckPassesWithAllowlist(): void
@@ -59,6 +69,37 @@ final class CssBuildTest extends TestCase
         $data = json_decode(implode("\n", $out), true);
         $this->assertTrue(is_array($data) && isset($data['rows']), 'keluaran --json tidak valid');
         $this->assertSame([], $data['stale'], 'ada entri allowlist usang');
+        $known = json_decode((string) file_get_contents($this->root . '/scripts/contrast-known-failures.json'), true)['failures'];
+        foreach ($known as $k) {
+            $this->assertTrue(isset($k['ratioAtListing']) && is_numeric($k['ratioAtListing']), 'entri allowlist wajib punya ratioAtListing: ' . $k['id']);
+        }
+    }
+
+    public function testContrastCheckFailsWhenKnownFailureWorsens(): void
+    {
+        $node = $this->node();
+        $this->assertTrue($node !== '', 'node diperlukan untuk skrip kontras');
+        $known = json_decode((string) file_get_contents($this->root . '/scripts/contrast-known-failures.json'), true);
+        $known['failures'][0]['ratioAtListing'] += 0.5; // rasio sekarang lebih rendah dari yang tercatat
+        $tmp = tempnam(sys_get_temp_dir(), 'known');
+        file_put_contents($tmp, json_encode($known));
+        exec(escapeshellarg($node) . ' ' . escapeshellarg($this->root . '/scripts/check-contrast.mjs') . ' --known=' . escapeshellarg($tmp) . ' 2>&1', $out, $code);
+        @unlink($tmp);
+        $this->assertSame(1, $code, 'kegagalan yang memburuk harus exit 1');
+        $this->assertTrue(str_contains(implode("\n", $out), 'MEMBURUK'));
+    }
+
+    public function testContrastCheckWarnsOnStaleEntry(): void
+    {
+        $node = $this->node();
+        $this->assertTrue($node !== '', 'node diperlukan untuk skrip kontras');
+        $known = json_decode((string) file_get_contents($this->root . '/scripts/contrast-known-failures.json'), true);
+        $known['failures'][] = ['theme' => 'light', 'id' => 'text-primary on surface', 'reason' => 'x', 'ratioAtListing' => 1.0];
+        $tmp = tempnam(sys_get_temp_dir(), 'known');
+        file_put_contents($tmp, json_encode($known));
+        exec(escapeshellarg($node) . ' ' . escapeshellarg($this->root . '/scripts/check-contrast.mjs') . ' --known=' . escapeshellarg($tmp) . ' 2>&1', $out, $code);
+        @unlink($tmp);
+        $this->assertTrue(str_contains(implode("\n", $out), 'PERINGATAN: entri allowlist USANG'));
     }
 
     public function testFontsReadmeExists(): void
