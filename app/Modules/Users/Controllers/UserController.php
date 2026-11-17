@@ -9,7 +9,6 @@ use App\Core\Exceptions\ValidationException;
 use App\Core\Http\ControllerSupport;
 use App\Core\Request;
 use App\Core\Response;
-use App\Core\View;
 use App\Modules\Users\Services\UserService;
 
 final class UserController
@@ -25,7 +24,7 @@ final class UserController
     public function index(Request $request): Response
     {
         $user = $this->user($request);
-        return Response::html(View::render('users/index', [
+        return Response::html($this->view($request, 'users/index', [
             'title' => 'Pengguna',
             'users' => $this->users->list($user),
             'canManage' => $this->policy->can($user, UserService::MANAGE),
@@ -134,7 +133,7 @@ final class UserController
     /** @param array<string, string> $errors @param array<string, mixed> $old */
     private function invitePage(Request $request, array $errors, array $old, int $status): Response
     {
-        return Response::html(View::render('users/invite', [
+        return Response::html($this->view($request, 'users/invite', [
             'title' => 'Undang pengguna',
             'errors' => $errors,
             'old' => $old,
@@ -151,7 +150,7 @@ final class UserController
     {
         $user = $context['user'];
         $old ??= ['name' => (string) $user['name'], 'phone' => (string) ($user['phone'] ?? '')];
-        return Response::html(View::render('users/edit', [
+        return Response::html($this->view($request, 'users/edit', [
             'title' => 'Ubah pengguna',
             'target' => $user,
             'roles' => $context['roles'],

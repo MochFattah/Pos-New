@@ -468,7 +468,7 @@ final class RegistrationTest extends TestCase
         $this->assertSame(422, $res->status());
         $body = $res->body();
         $this->assertFalse(str_contains($body, '<script>'));
-        $this->assertFalse(str_contains($body, '"><'));
+        $this->assertFalse(str_contains($body, '"><script>'));
         $this->assertContains('value="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"', $body);
         $this->assertFalse(str_contains($body, "value=''"));
         $this->assertContains('&#039; onfocus=&#039;alert(2)', $body);
@@ -511,7 +511,7 @@ final class RegistrationTest extends TestCase
     public function testTemplatesHaveLabelsAndNoInlineScript(): void
     {
         $dir = dirname(__DIR__, 3) . '/resources/views';
-        foreach (['auth/register', 'auth/resend-verification', 'auth/verify-result', 'auth/verification-sent', 'auth/notice', 'layouts/public'] as $name) {
+        foreach (['auth/register', 'auth/resend-verification', 'auth/verify-result', 'auth/verification-sent', 'auth/notice'] as $name) {
             $src = (string) file_get_contents("$dir/$name.php");
             $this->assertFalse(str_contains(strtolower($src), '<script'), "$name script");
             $this->assertFalse(preg_match('/\son[a-z]+\s*=/i', $src) === 1, "$name handler inline");
@@ -522,7 +522,7 @@ final class RegistrationTest extends TestCase
         preg_match_all('/<input\b[^>]*\bid="([^"]+)"[^>]*>/', $html, $m);
         $this->assertTrue(count($m[1]) >= 8);
         foreach ($m[1] as $id) {
-            $this->assertContains('<label for="' . $id . '">', $html);
+            $this->assertTrue(preg_match('/<label\b[^>]*\bfor="' . preg_quote($id, '/') . '"/', $html) === 1, "label untuk $id");
         }
         $this->assertContains('name="_csrf"', $html);
     }

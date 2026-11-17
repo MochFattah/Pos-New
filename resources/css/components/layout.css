@@ -14,6 +14,7 @@
 
     .topbar {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: var(--space-3);
         min-height: 3.5rem;
@@ -21,7 +22,7 @@
         background: var(--color-surface);
         border-bottom: 1px solid var(--color-border);
     }
-    .topbar__title { font-weight: var(--weight-semibold); margin-inline-end: auto; }
+    .topbar__title { font-weight: var(--weight-semibold); margin-inline-end: auto; min-width: 0; overflow-wrap: anywhere; }
     .topbar__actions { display: flex; align-items: center; gap: var(--space-2); }
 
     .sidebar {
@@ -48,7 +49,7 @@
             transition: transform 0.2s ease;
             box-shadow: var(--shadow-overlay);
         }
-        .sidebar[data-open="true"] { transform: translateX(0); }
+        .sidebar[data-open="true"], .sidebar:target { transform: translateX(0); }
         .sidebar-scrim { position: fixed; inset: 0; z-index: 30; background: var(--scrim); }
         .sidebar-scrim[hidden] { display: none; }
     }
@@ -85,7 +86,14 @@
 
     /* Halaman publik (login, daftar): satu kolom terpusat. */
     .auth-page { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: var(--content-padding); background: var(--color-background); }
+    .auth-card--wide { max-width: 40rem; }
+    .auth-brand { font-weight: var(--weight-semibold); color: var(--color-text-secondary); }
     .auth-card { width: 100%; max-width: 26rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-xl); padding: var(--space-8) var(--space-6); }
+
+    /* Pasangan label-nilai (detail ringkas di halaman). */
+    .meta-list { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-1) var(--space-4); margin: 0; }
+    .meta-list dt { color: var(--color-text-secondary); }
+    .meta-list dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 
     .visually-hidden {
         position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;

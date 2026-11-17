@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tests\Support;
 
 use App\Core\Database\Connection;
+use App\Core\Authorization\PolicyService;
 use App\Core\Middleware\AccessGateMiddleware;
+use App\Core\Middleware\AppShellMiddleware;
 use App\Core\Middleware\AuthMiddleware;
 use App\Core\Middleware\CsrfMiddleware;
 use App\Core\Middleware\SessionMiddleware;
@@ -121,6 +123,7 @@ abstract class AuthHarness extends TestCase
             HomeController::class => $home,
             AuthMiddleware::class => $authMw,
             AccessGateMiddleware::class => $gate,
+            AppShellMiddleware::class => new AppShellMiddleware(new PolicyService($this->db), $tenants),
         ] + $this->extraServices();
         $this->router = new Router(static fn (string $class): object => $services[$class]
             ?? throw new \LogicException('Layanan tidak terdaftar di harness: ' . $class));

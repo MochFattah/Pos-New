@@ -6,9 +6,11 @@ namespace App\Core\Http;
 
 use App\Core\Authorization\AuthUser;
 use App\Core\Exceptions\NotFoundException;
+use App\Core\Layout\AppShell;
 use App\Core\Request;
 use App\Core\Security\Csrf;
 use App\Core\Security\Session;
+use App\Core\View;
 
 /** Pembantu bersama controller yang berada di belakang AuthMiddleware. */
 trait ControllerSupport
@@ -20,6 +22,15 @@ trait ControllerSupport
             throw new \LogicException(static::class . ' membutuhkan AuthMiddleware.');
         }
         return $user;
+    }
+
+    /** Merender templat dengan layouts/app; data kerangka dari AppShellMiddleware (cadangan: tanpa menu). @param array<string, mixed> $data */
+    private function view(Request $request, string $template, array $data): string
+    {
+        $shell = $request->attribute('shell');
+        return View::render($template, $data + [
+            'shell' => $shell instanceof AppShell ? $shell : AppShell::minimal($this->user($request)->name, $this->csrf($request)),
+        ], 'app');
     }
 
     private function id(Request $request, string $notFoundMessage): int

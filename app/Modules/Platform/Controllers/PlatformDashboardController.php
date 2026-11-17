@@ -24,6 +24,6 @@ final class PlatformDashboardController
             'title' => 'Beranda platform',
             'name' => (string) ($user['name'] ?? ''),
             'csrf' => $session instanceof Session ? Csrf::token($session) : '',
-        ]))->sensitive();
+        ], 'platform'))->sensitive();
     }
 }

@@ -53,4 +53,23 @@ final class DemoService
             [$tenantId, $now, $now]
         ) !== null;
     }
+
+    /**
+     * Sisa detik pada jendela demo yang berlaku (yang berakhir paling akhir bila ada beberapa);
+     * null bila tidak ada jendela berlaku. Selalu terbatas pada tenant yang diminta.
+     */
+    public function remainingSeconds(int $tenantId): ?int
+    {
+        $nowTs = ($this->clock)();
+        $now = gmdate('Y-m-d H:i:s', $nowTs);
+        $row = $this->db->fetchOne(
+            'SELECT ends_at FROM tenant_demos WHERE tenant_id = ? AND starts_at <= ? AND ends_at > ? ORDER BY ends_at DESC LIMIT 1',
+            [$tenantId, $now, $now]
+        );
+        if ($row === null) {
+            return null;
+        }
+        $end = strtotime((string) $row['ends_at'] . ' UTC');
+        return $end === false ? null : max(0, $end - $nowTs);
+    }
 }

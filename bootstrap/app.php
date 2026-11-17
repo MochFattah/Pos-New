@@ -6,6 +6,7 @@ use App\Core\Application;
 use App\Core\Config;
 use App\Core\Env;
 use App\Core\Middleware\AccessGateMiddleware;
+use App\Core\Middleware\AppShellMiddleware;
 use App\Core\Middleware\AuthMiddleware;
 use App\Core\Authorization\AccessDeniedRecorder;
 use App\Core\Authorization\PolicyService;
@@ -288,6 +289,7 @@ $buildRouter = static function () use ($basePath, $buildSettingsController, $bui
         PlatformDashboardController::class => new PlatformDashboardController(),
         PlatformAuthMiddleware::class => new PlatformAuthMiddleware($buildPlatformAuthService()),
         AccessGateMiddleware::class => new AccessGateMiddleware(new DemoService($sharedDb())),
+        AppShellMiddleware::class => new AppShellMiddleware($sharedPolicy(), new TenantRepository($sharedDb())),
         default => new $class(),
     });
     foreach ($buildGlobalMiddleware() as $middleware) {

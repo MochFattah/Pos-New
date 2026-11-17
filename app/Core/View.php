@@ -26,6 +26,17 @@ final class View
         return $self->include(self::path('layouts/' . $layout), array_merge($data, ['content' => new RawHtml($content)]) + ['title' => ''], true);
     }
 
+    /**
+     * Menyisipkan potongan templat (resources/views/components/*) di dalam templat lain.
+     * Data berlaku hanya untuk potongan itu; pemanggil tetap bertanggung jawab atas escape-nya.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function partial(string $name, array $data = []): RawHtml
+    {
+        return new RawHtml($this->include(self::path('components/' . $name), $data));
+    }
+
     public static function e(mixed $value): string
     {
         if ($value instanceof RawHtml) {

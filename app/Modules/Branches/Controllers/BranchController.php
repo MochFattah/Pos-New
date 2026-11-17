@@ -4,19 +4,21 @@ declare(strict_types=1);
 
 namespace App\Modules\Branches\Controllers;
 
-use App\Core\Authorization\AuthUser;
 use App\Core\Authorization\PolicyService;
 use App\Core\Exceptions\NotFoundException;
+use App\Core\Http\ControllerSupport;
 use App\Core\Exceptions\ValidationException;
 use App\Core\Request;
 use App\Core\Response;
-use App\Core\Security\Csrf;
 use App\Core\Security\Session;
-use App\Core\View;
 use App\Modules\Branches\Services\BranchService;
 
 final class BranchController
 {
+    use ControllerSupport;
+
+    private const NOT_FOUND = 'Cabang tidak ditemukan.';
+
     public function __construct(private readonly BranchService $branches, private readonly PolicyService $policy)
     {
     }
@@ -27,7 +29,7 @@ final class BranchController
         $session = $request->attribute('session');
         $notice = $session instanceof Session ? $session->pullFlash('notice') : null;
         $error = $session instanceof Session ? $session->pullFlash('error') : null;
-        return Response::html(View::render('branches/index', [
+        return Response::html($this->view($request, 'branches/index', [
             'title' => 'Cabang',
             'branches' => $this->branches->list($user),
             'canManage' => $this->policy->can($user, BranchService::MANAGE),
@@ -56,7 +58,7 @@ final class BranchController
 
     public function editForm(Request $request): Response
     {
-        $branch = $this->branches->forEdit($this->user($request), $this->id($request));
+        $branch = $this->branches->forEdit($this->user($request), $this->id($request, self::NOT_FOUND));
         return $this->form($request, $branch, [], [
             'code' => (string) $branch['code'],
             'name' => (string) $branch['name'],
@@ -68,7 +70,7 @@ final class BranchController
     public function update(Request $request): Response
     {
         $user = $this->user($request);
-        $id = $this->id($request);
+        $id = $this->id($request, self::NOT_FOUND);
         $input = $this->input($request);
         try {
             $this->branches->update($user, $id, $input);
@@ -91,7 +93,7 @@ final class BranchController
     private function toggle(Request $request, bool $activate): Response
     {
         $user = $this->user($request);
-        $id = $this->id($request);
+        $id = $this->id($request, self::NOT_FOUND);
         try {
             $activate ? $this->branches->activate($user, $id) : $this->branches->deactivate($user, $id);
         } catch (ValidationException $e) {
@@ -109,7 +111,7 @@ final class BranchController
     {
         $this->policy->authorize($this->user($request), BranchService::MANAGE);
         $isEdit = $branch !== null;
-        return Response::html(View::render('branches/form', [
+        return Response::html($this->view($request, 'branches/form', [
             'title' => $isEdit ? 'Ubah cabang' : 'Tambah cabang',
             'action' => $isEdit ? '/cabang/' . (int) $branch['id'] : '/cabang',
             'isEdit' => $isEdit,
@@ -136,29 +138,5 @@ final class BranchController
             $out[$field] = $request->input($field);
         }
         return $out;
-    }
-
-    private function id(Request $request): int
-    {
-        $raw = $request->attribute('id');
-        if (!is_string($raw) || preg_match('/^[1-9][0-9]{0,17}\z/', $raw) !== 1) {
-            throw new NotFoundException('Cabang tidak ditemukan.');
-        }
-        return (int) $raw;
-    }
-
-    private function user(Request $request): AuthUser
-    {
-        $user = $request->attribute('user');
-        if (!$user instanceof AuthUser) {
-            throw new \LogicException('BranchController membutuhkan AuthMiddleware.');
-        }
-        return $user;
-    }
-
-    private function csrf(Request $request): string
-    {
-        $session = $request->attribute('session');
-        return $session instanceof Session ? Csrf::token($session) : '';
     }
 }

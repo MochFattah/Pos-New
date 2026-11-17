@@ -1,7 +1,11 @@
-<?php /** @var App\Core\View $this @var string $name @var string $csrf */ ?>
-<h1>Beranda platform</h1>
-<p>Selamat datang, <?= $this->e($name) ?>.</p>
-<form method="post" action="/platform/keluar">
-<input type="hidden" name="_csrf" value="<?= $this->e($csrf) ?>">
-<button type="submit">Keluar</button>
-</form>
+<?php /** @var App\Core\View $this @var string $name */ ?>
+<div class="page-header">
+<div>
+<h1 class="page-header__title">Beranda platform</h1>
+<p class="page-header__subtitle">Selamat datang, <?= $this->e($name) ?>.</p>
+</div>
+</div>
+<div class="empty-state">
+<p class="empty-state__title">Belum ada data platform</p>
+<p class="empty-state__body">Metrik dan pengelolaan tenant akan tersedia di tahap berikutnya.</p>
+</div>

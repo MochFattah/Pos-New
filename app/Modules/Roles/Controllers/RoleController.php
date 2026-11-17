@@ -9,7 +9,6 @@ use App\Core\Exceptions\ValidationException;
 use App\Core\Http\ControllerSupport;
 use App\Core\Request;
 use App\Core\Response;
-use App\Core\View;
 use App\Modules\Roles\Services\RoleService;
 
 final class RoleController
@@ -25,7 +24,7 @@ final class RoleController
     public function index(Request $request): Response
     {
         $user = $this->user($request);
-        return Response::html(View::render('roles/index', [
+        return Response::html($this->view($request, 'roles/index', [
             'title' => 'Role dan izin',
             'roles' => $this->roles->list($user),
             'canManage' => $this->policy->can($user, RoleService::MANAGE),
@@ -57,7 +56,7 @@ final class RoleController
     {
         $user = $this->user($request);
         $role = $this->roles->get($user, $this->id($request, self::NOT_FOUND));
-        return Response::html(View::render('roles/show', [
+        return Response::html($this->view($request, 'roles/show', [
             'title' => 'Role ' . $role['name'],
             'role' => $role,
             'catalog' => $this->roles->catalog($user),
@@ -112,7 +111,7 @@ final class RoleController
     {
         $user = $this->user($request);
         $this->policy->authorize($user, RoleService::MANAGE);
-        return Response::html(View::render('roles/form', [
+        return Response::html($this->view($request, 'roles/form', [
             'title' => 'Tambah role',
             'catalog' => $this->roles->catalog($user),
             'errors' => $errors,

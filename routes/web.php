@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Core\Middleware\AccessGateMiddleware;
+use App\Core\Middleware\AppShellMiddleware;
 use App\Core\Middleware\AuthMiddleware;
 use App\Core\Middleware\PermissionMiddleware;
 use App\Core\Router;
@@ -17,6 +18,7 @@ use App\Modules\Users\Controllers\InvitationController;
 use App\Modules\Users\Controllers\UserController;
 
 return static function (Router $router): void {
+    $router->get('/', [HomeController::class, 'landing']);
     $router->get('/daftar', [RegisterController::class, 'showForm']);
     $router->post('/daftar', [RegisterController::class, 'submit']);
     $router->get('/daftar/cek-email', [RegisterController::class, 'sent']);
@@ -32,10 +34,10 @@ return static function (Router $router): void {
     $router->get('/reset-password/{token}', [PasswordResetController::class, 'showResetForm']);
     $router->post('/reset-password/{token}', [PasswordResetController::class, 'submitReset']);
 
-    $router->get('/beranda', [HomeController::class, 'home'], [AuthMiddleware::class, AccessGateMiddleware::class]);
+    $router->get('/beranda', [HomeController::class, 'home'], [AuthMiddleware::class, AccessGateMiddleware::class, AppShellMiddleware::class]);
     $router->get('/demo-berakhir', [HomeController::class, 'demoEnded'], [AuthMiddleware::class]);
 
-    $guard = static fn (string $permission): array => [AuthMiddleware::class, AccessGateMiddleware::class, PermissionMiddleware::requires($permission)];
+    $guard = static fn (string $permission): array => [AuthMiddleware::class, AccessGateMiddleware::class, PermissionMiddleware::requires($permission), AppShellMiddleware::class];
     $router->get('/cabang', [BranchController::class, 'index'], $guard('branches.view'));
     $router->get('/cabang/baru', [BranchController::class, 'createForm'], $guard('branches.manage'));
     $router->post('/cabang', [BranchController::class, 'store'], $guard('branches.manage'));

@@ -47,7 +47,25 @@ final class Application
         }
     }
 
+    /** Halaman kesalahan lewat layouts/public; bila lapisan view sendiri gagal, jatuh ke HTML polos agar tetap aman. */
     private static function page(int $status, string $message, ?string $requestId = null, ?string $detail = null): Response
+    {
+        try {
+            $template = is_file(dirname(__DIR__, 2) . '/resources/views/errors/' . $status . '.php') ? (string) $status : 'generic';
+            $titles = [403 => 'Akses ditolak', 404 => 'Halaman tidak ditemukan', 419 => 'Sesi kedaluwarsa', 422 => 'Data tidak dapat diproses', 429 => 'Terlalu banyak permintaan', 500 => 'Terjadi kesalahan'];
+            return Response::html(View::render('errors/' . $template, [
+                'title' => $titles[$status] ?? 'Kesalahan ' . $status,
+                'status' => $status,
+                'message' => $message,
+                'requestId' => $requestId,
+                'detail' => $detail,
+            ]), $status);
+        } catch (Throwable) {
+            return self::plainPage($status, $message, $requestId, $detail);
+        }
+    }
+
+    private static function plainPage(int $status, string $message, ?string $requestId, ?string $detail): Response
     {
         $e = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $html = '<!doctype html><html lang="id"><head><meta charset="utf-8">'

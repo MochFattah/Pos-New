@@ -10,7 +10,6 @@ use App\Core\Exceptions\ValidationException;
 use App\Core\Http\ControllerSupport;
 use App\Core\Request;
 use App\Core\Response;
-use App\Core\View;
 use App\Modules\Tenants\Services\TenantSettingsService;
 use App\Modules\Tenants\Validators\SettingsValidator;
 
@@ -111,7 +110,7 @@ final class SettingsController
     private function page(Request $request, bool $hasLogo, array $old, array $errors, array $logoErrors, int $status): Response
     {
         $canManage = $this->policy->can($this->user($request), TenantSettingsService::MANAGE);
-        return Response::html(View::render('settings/index', [
+        return Response::html($this->view($request, 'settings/index', [
             'title' => 'Pengaturan bisnis',
             'old' => $old,
             'errors' => $errors,
