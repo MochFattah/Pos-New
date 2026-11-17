@@ -9,16 +9,12 @@
 ?>
 <h1>Kirim ulang email verifikasi</h1>
 <?php if ($notice !== null): ?>
-<p role="status"><?= $this->e($notice) ?></p>
+<div class="alert" role="status"><?= $this->e($notice) ?></div>
 <?php endif; ?>
-<form method="post" action="/verifikasi-email/kirim-ulang" novalidate>
+<?= $this->partial('error-summary', ['errors' => $errors]) ?>
+<form method="post" action="/verifikasi-email/kirim-ulang" class="stack" novalidate>
 <input type="hidden" name="_csrf" value="<?= $this->e($csrf) ?>">
-<p>
-<label for="email">Email</label><br>
-<input id="email" name="email" type="email" autocomplete="email" required value="<?= $this->e($email) ?>"<?php if (isset($errors['email'])): ?> aria-invalid="true" aria-describedby="email-error"<?php endif; ?>>
-<?php if (isset($errors['email'])): ?>
-<br><span id="email-error"><?= $this->e($errors['email']) ?></span>
-<?php endif; ?>
-</p>
-<p><button type="submit">Kirim ulang</button></p>
+<?= $this->partial('field', ['name' => 'email', 'label' => 'Email', 'type' => 'email', 'value' => $email, 'autocomplete' => 'email', 'inputmode' => 'email', 'required' => true, 'errors' => $errors]) ?>
+<button type="submit" class="btn btn-primary">Kirim ulang</button>
 </form>
+<p><a href="/masuk">Kembali ke halaman masuk</a></p>

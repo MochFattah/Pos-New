@@ -8,19 +8,16 @@
  * @var string $csrf
  */
 ?>
-<h1>Tambah role</h1>
-<?php if ($errors !== []): ?>
-<p role="alert"><?= $this->e($errors['permissions'] ?? 'Periksa kembali isian Anda.') ?></p>
-<?php endif; ?>
-<form method="post" action="/role" novalidate>
+<div class="page-header">
+<h1 class="page-header__title">Tambah role</h1>
+</div>
+<?= $this->partial('error-summary', ['errors' => $errors]) ?>
+<form method="post" action="/role" class="card stack max-w-2xl" novalidate>
 <input type="hidden" name="_csrf" value="<?= $this->e($csrf) ?>">
-<p>
-<label for="name">Nama role</label><br>
-<input id="name" name="name" type="text" autocomplete="off" required value="<?= $this->e($old['name'] ?? '') ?>"<?php if (isset($errors['name'])): ?> aria-invalid="true" aria-describedby="name-error"<?php endif; ?>>
-<?php if (isset($errors['name'])): ?>
-<br><span id="name-error"><?= $this->e($errors['name']) ?></span>
-<?php endif; ?>
-</p>
+<?= $this->partial('field', ['name' => 'name', 'label' => 'Nama role', 'value' => (string) ($old['name'] ?? ''), 'autocomplete' => 'off', 'required' => true, 'errors' => $errors]) ?>
 <?php include __DIR__ . '/_permissions.php'; ?>
-<p><button type="submit">Simpan role</button> <a href="/role">Batal</a></p>
+<div class="cluster">
+<button type="submit" class="btn btn-primary">Simpan role</button>
+<a class="btn btn-tertiary" href="/role">Batal</a>
+</div>
 </form>

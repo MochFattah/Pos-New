@@ -146,7 +146,7 @@ final class PasswordResetTest extends AuthHarness
         $token = $this->mailer->lastResetToken();
         $form = $this->send('GET', '/reset-password/' . $token);
         $this->assertSame(200, $form->status());
-        $this->assertContains('<label for="password_confirmation">', $form->body());
+        $this->assertContains('<label class="field-label" for="password_confirmation">', $form->body());
         $mismatch = $this->send('POST', '/reset-password/' . $token, ['password' => self::NEW_PASSWORD, 'password_confirmation' => 'beda-sekali-1']);
         $this->assertSame(422, $mismatch->status());
         $ok = $this->send('POST', '/reset-password/' . $token, ['password' => self::NEW_PASSWORD, 'password_confirmation' => self::NEW_PASSWORD]);

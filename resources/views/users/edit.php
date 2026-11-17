@@ -14,93 +14,83 @@
 $id = (int) $target['id'];
 $isOwner = (int) $target['is_owner'] === 1;
 $status = (string) $target['status'];
-$statusLabels = ['active' => 'Aktif', 'inactive' => 'Nonaktif', 'pending_verification' => 'Menunggu undangan diterima'];
 ?>
-<h1>Ubah pengguna</h1>
-<?php if ($notice !== null): ?>
-<p role="status"><?= $this->e($notice) ?></p>
-<?php endif; ?>
-<?php if ($error !== null): ?>
-<p role="alert"><?= $this->e($error) ?></p>
-<?php endif; ?>
-<?php if ($errors !== []): ?>
-<p role="alert">Periksa kembali isian Anda.</p>
-<?php endif; ?>
-<p>Email: <?= $this->e($target['email']) ?> | Status: <?= $this->e($statusLabels[$status] ?? $status) ?><?= $isOwner ? ' | Owner' : '' ?></p>
+<div class="page-header">
+<div>
+<h1 class="page-header__title">Ubah pengguna</h1>
+<p class="page-header__subtitle"><?= $this->e($target['email']) ?></p>
+</div>
+<div class="page-header__actions">
+<a class="btn btn-secondary" href="/pengguna">Kembali ke daftar pengguna</a>
+</div>
+</div>
+<?= $this->partial('flash', ['notice' => $notice, 'error' => $error]) ?>
+<?= $this->partial('error-summary', ['errors' => $errors]) ?>
+<dl class="meta-list">
+<dt>Email</dt>
+<dd><?= $this->e($target['email']) ?></dd>
+<dt>Status</dt>
+<dd><?= $this->partial('status-badge', ['status' => $status]) ?><?php if ($isOwner): ?> <span class="badge badge-info">Owner</span><?php endif; ?></dd>
+</dl>
 
-<h2>Profil</h2>
-<form method="post" action="/pengguna/<?= $this->e($id) ?>" novalidate>
+<form method="post" action="/pengguna/<?= $this->e($id) ?>" class="card stack max-w-2xl" novalidate>
+<h2 class="card__title">Profil</h2>
 <input type="hidden" name="_csrf" value="<?= $this->e($csrf) ?>">
-<p>
-<label for="name">Nama</label><br>
-<input id="name" name="name" type="text" autocomplete="off" required value="<?= $this->e($old['name'] ?? '') ?>"<?php if (isset($errors['name'])): ?> aria-invalid="true" aria-describedby="name-error"<?php endif; ?>>
-<?php if (isset($errors['name'])): ?>
-<br><span id="name-error"><?= $this->e($errors['name']) ?></span>
-<?php endif; ?>
-</p>
-<p>
-<label for="phone">Nomor telepon</label><br>
-<input id="phone" name="phone" type="tel" autocomplete="off" value="<?= $this->e($old['phone'] ?? '') ?>"<?php if (isset($errors['phone'])): ?> aria-invalid="true" aria-describedby="phone-error"<?php endif; ?>>
-<?php if (isset($errors['phone'])): ?>
-<br><span id="phone-error"><?= $this->e($errors['phone']) ?></span>
-<?php endif; ?>
-</p>
-<p><button type="submit">Simpan profil</button></p>
+<?= $this->partial('field', ['name' => 'name', 'label' => 'Nama', 'value' => (string) ($old['name'] ?? ''), 'autocomplete' => 'off', 'required' => true, 'errors' => $errors]) ?>
+<?= $this->partial('field', ['name' => 'phone', 'label' => 'Nomor telepon', 'type' => 'tel', 'value' => (string) ($old['phone'] ?? ''), 'autocomplete' => 'off', 'inputmode' => 'tel', 'errors' => $errors]) ?>
+<div><button type="submit" class="btn btn-primary">Simpan profil</button></div>
 </form>
 
-<h2>Role</h2>
-<form method="post" action="/pengguna/<?= $this->e($id) ?>/role">
+<form method="post" action="/pengguna/<?= $this->e($id) ?>/role" class="card stack max-w-2xl">
+<h2 class="card__title">Role</h2>
 <input type="hidden" name="_csrf" value="<?= $this->e($csrf) ?>">
-<fieldset>
+<fieldset class="fieldset stack-sm">
 <legend>Role pengguna</legend>
 <?php foreach ($roles as $role): ?>
 <?php $locked = (bool) $role['locked']; $checked = (bool) $role['checked']; ?>
-<p>
-<input id="role-<?= $this->e($role['id']) ?>" type="checkbox"<?= $locked ? '' : ' name="role_ids[]"' ?> value="<?= $this->e($role['id']) ?>"<?= $checked ? ' checked' : '' ?><?= $locked ? ' disabled' : '' ?>>
 <?php if ($locked && $checked): ?>
 <input type="hidden" name="role_ids[]" value="<?= $this->e($role['id']) ?>">
 <?php endif; ?>
-<label for="role-<?= $this->e($role['id']) ?>"><?= $this->e($role['name']) ?></label>
-<?php if ($locked): ?>
-<span>(tidak dapat Anda ubah)</span>
-<?php endif; ?>
-</p>
+<label class="check" for="role-<?= $this->e($role['id']) ?>">
+<input id="role-<?= $this->e($role['id']) ?>" type="checkbox"<?= $locked ? '' : ' name="role_ids[]"' ?> value="<?= $this->e($role['id']) ?>"<?= $checked ? ' checked' : '' ?><?= $locked ? ' disabled' : '' ?>>
+<span><?= $this->e($role['name']) ?><?php if ($locked): ?> <span class="field-hint">(tidak dapat Anda ubah)</span><?php endif; ?></span>
+</label>
 <?php endforeach; ?>
 </fieldset>
-<p><button type="submit">Simpan role</button></p>
+<div><button type="submit" class="btn btn-primary">Simpan role</button></div>
 </form>
 
-<h2>Akses cabang</h2>
+<section class="card stack max-w-2xl" aria-labelledby="akses-cabang">
+<h2 class="card__title" id="akses-cabang">Akses cabang</h2>
 <?php if ($isOwner): ?>
 <p>Owner otomatis dapat mengakses semua cabang.</p>
 <?php else: ?>
-<form method="post" action="/pengguna/<?= $this->e($id) ?>/cabang">
+<form method="post" action="/pengguna/<?= $this->e($id) ?>/cabang" class="stack">
 <input type="hidden" name="_csrf" value="<?= $this->e($csrf) ?>">
-<fieldset>
+<fieldset class="fieldset stack-sm">
 <legend>Cabang yang dapat diakses</legend>
 <?php foreach ($branches as $branch): ?>
 <?php $locked = (bool) $branch['locked']; $checked = (bool) $branch['checked']; ?>
-<p>
-<input id="branch-<?= $this->e($branch['id']) ?>" type="checkbox"<?= $locked ? '' : ' name="branch_ids[]"' ?> value="<?= $this->e($branch['id']) ?>"<?= $checked ? ' checked' : '' ?><?= $locked ? ' disabled' : '' ?>>
 <?php if ($locked && $checked): ?>
 <input type="hidden" name="branch_ids[]" value="<?= $this->e($branch['id']) ?>">
 <?php endif; ?>
-<label for="branch-<?= $this->e($branch['id']) ?>"><?= $this->e($branch['name']) ?> (<?= $this->e($branch['code']) ?>)</label>
-<?php if ($locked): ?>
-<span>(di luar akses Anda)</span>
-<?php endif; ?>
-</p>
+<label class="check" for="branch-<?= $this->e($branch['id']) ?>">
+<input id="branch-<?= $this->e($branch['id']) ?>" type="checkbox"<?= $locked ? '' : ' name="branch_ids[]"' ?> value="<?= $this->e($branch['id']) ?>"<?= $checked ? ' checked' : '' ?><?= $locked ? ' disabled' : '' ?>>
+<span><?= $this->e($branch['name']) ?> (<?= $this->e($branch['code']) ?>)<?php if ($locked): ?> <span class="field-hint">(di luar akses Anda)</span><?php endif; ?></span>
+</label>
 <?php endforeach; ?>
 </fieldset>
-<p><button type="submit">Simpan akses cabang</button></p>
+<div><button type="submit" class="btn btn-primary">Simpan akses cabang</button></div>
 </form>
 <?php endif; ?>
+</section>
 
-<h2>Status akun</h2>
+<section class="card stack max-w-2xl" aria-labelledby="status-akun">
+<h2 class="card__title" id="status-akun">Status akun</h2>
 <?php if ($status === 'pending_verification'): ?>
 <form method="post" action="/pengguna/<?= $this->e($id) ?>/kirim-ulang-undangan">
 <input type="hidden" name="_csrf" value="<?= $this->e($csrf) ?>">
-<p><button type="submit">Kirim ulang undangan</button></p>
+<button type="submit" class="btn btn-secondary">Kirim ulang undangan</button>
 </form>
 <?php endif; ?>
 <?php if ($isOwner): ?>
@@ -110,12 +100,21 @@ $statusLabels = ['active' => 'Aktif', 'inactive' => 'Nonaktif', 'pending_verific
 <?php elseif ($status === 'inactive' && $target['email_verified_at'] !== null): ?>
 <form method="post" action="/pengguna/<?= $this->e($id) ?>/aktifkan">
 <input type="hidden" name="_csrf" value="<?= $this->e($csrf) ?>">
-<p><button type="submit">Aktifkan pengguna</button></p>
+<button type="submit" class="btn btn-secondary">Aktifkan pengguna</button>
 </form>
 <?php elseif ($status !== 'inactive'): ?>
-<form method="post" action="/pengguna/<?= $this->e($id) ?>/nonaktifkan">
-<input type="hidden" name="_csrf" value="<?= $this->e($csrf) ?>">
-<p><button type="submit"><?= $status === 'pending_verification' ? 'Batalkan undangan' : 'Nonaktifkan pengguna' ?></button></p>
-</form>
+<?php $pending = $status === 'pending_verification'; ?>
+<div>
+<?= $this->partial('confirm-form', [
+    'id' => 'nonaktifkan-pengguna',
+    'action' => '/pengguna/' . $id . '/nonaktifkan',
+    'csrf' => $csrf,
+    'label' => $pending ? 'Batalkan undangan' : 'Nonaktifkan pengguna',
+    'title' => ($pending ? 'Batalkan undangan untuk ' : 'Nonaktifkan ') . $target['name'] . '?',
+    'body' => $pending
+        ? 'Tautan undangan tidak akan berlaku lagi. Anda dapat mengundang ulang kapan saja.'
+        : 'Pengguna ini tidak dapat masuk lagi sampai diaktifkan kembali. Datanya tidak dihapus.',
+]) ?>
+</div>
 <?php endif; ?>
-<p><a href="/pengguna">Kembali ke daftar pengguna</a></p>
+</section>

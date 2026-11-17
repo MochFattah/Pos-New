@@ -220,7 +220,7 @@ final class LoginTest extends AuthHarness
         $this->assertSame(422, $response->status());
         $this->assertContains('aria-describedby="email-error"', $response->body());
         $this->assertContains('aria-describedby="password-error"', $response->body());
-        $this->assertContains('<label for="password">', $response->body());
+        $this->assertContains('<label class="field-label" for="password">', $response->body());
     }
 
     public function testPasswordIsNeverEchoedBack(): void
