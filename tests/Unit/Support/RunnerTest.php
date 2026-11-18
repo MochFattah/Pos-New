@@ -52,4 +52,14 @@ final class RunnerTest extends TestCase
         $this->assertContains('FAIL', $result['lines'][0]);
         $this->assertContains('ErrorException', $result['lines'][0]);
     }
+
+    public function testSkippedTestsAreCountedSeparatelyFromPassed(): void
+    {
+        file_put_contents($this->dir . '/Bad/SkipTest.php', "<?php\ndeclare(strict_types=1);\nnamespace Tests\\Bad;\nuse Tests\\Support\\TestCase;\nfinal class SkipTest extends TestCase\n{\n    public function testSkips(): void\n    {\n        \$this->skip('tidak tersedia');\n    }\n}\n");
+        $result = Runner::run($this->dir);
+        $this->assertSame(1, $result['skipped']);
+        $this->assertSame(0, $result['passed']);
+        $this->assertSame(0, $result['failed']);
+        $this->assertContains('SKIP', $result['lines'][0]);
+    }
 }

@@ -15,12 +15,12 @@ final class Runner
     /**
      * Menjalankan semua tes di bawah $dir (namespace Tests\ dipetakan ke $dir).
      *
-     * @return array{passed:int, failed:int, lines:list<string>}
+     * @return array{passed:int, failed:int, skipped:int, lines:list<string>}
      */
     public static function run(string $dir, string $filter = ''): array
     {
         $dir = rtrim($dir, '/');
-        $result = ['passed' => 0, 'failed' => 0, 'lines' => []];
+        $result = ['passed' => 0, 'failed' => 0, 'skipped' => 0, 'lines' => []];
 
         $files = [];
         $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS));
@@ -62,7 +62,7 @@ final class Runner
         return $result;
     }
 
-    /** @param array{passed:int, failed:int, lines:list<string>} $result */
+    /** @param array{passed:int, failed:int, skipped:int, lines:list<string>} $result */
     private static function runOne(array &$result, string $class, string $method, string $name): void
     {
         $case = new $class();
@@ -75,7 +75,7 @@ final class Runner
             $result['passed']++;
             $result['lines'][] = "PASS  $name";
         } catch (SkippedException $e) {
-            $result['passed']++;
+            $result['skipped']++;
             $result['lines'][] = "SKIP  $name\n      " . $e->getMessage();
         } catch (Throwable $e) {
             $result['failed']++;
@@ -89,7 +89,7 @@ final class Runner
         }
     }
 
-    /** @param array{passed:int, failed:int, lines:list<string>} $result */
+    /** @param array{passed:int, failed:int, skipped:int, lines:list<string>} $result */
     private static function fail(array &$result, string $path, string $reason): void
     {
         $result['failed']++;

@@ -16,7 +16,8 @@ final class JsBehaviorTest extends TestCase
         $code = 0;
         exec('cd ' . escapeshellarg($root) . ' && node scripts/test-js.mjs 2>&1', $out, $code);
         $text = implode("\n", $out);
-        if ($code === 2 || str_contains($text, 'DILEWATI')) {
+        // Kode 2 = penanda eksplisit dari test-js.mjs bahwa playwright/Chromium tidak tersedia; kegagalan lain tetap gagal.
+        if ($code === 2) {
             $this->skip('tes JS dilewati: ' . (preg_match('/DILEWATI[^\n]*/', $text, $m) === 1 ? $m[0] : 'node/playwright tidak tersedia'));
         }
         if ($code === 127) {
