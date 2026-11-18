@@ -44,7 +44,7 @@ $status = (string) $target['status'];
 <form method="post" action="/pengguna/<?= $this->e($id) ?>/role" class="card stack max-w-2xl">
 <h2 class="card__title">Role</h2>
 <input type="hidden" name="_csrf" value="<?= $this->e($csrf) ?>">
-<fieldset class="fieldset stack-sm">
+<fieldset class="fieldset stack-sm" id="role_ids" tabindex="-1">
 <legend>Role pengguna</legend>
 <?php foreach ($roles as $role): ?>
 <?php $locked = (bool) $role['locked']; $checked = (bool) $role['checked']; ?>
@@ -63,11 +63,11 @@ $status = (string) $target['status'];
 <section class="card stack max-w-2xl" aria-labelledby="akses-cabang">
 <h2 class="card__title" id="akses-cabang">Akses cabang</h2>
 <?php if ($isOwner): ?>
-<p>Owner otomatis dapat mengakses semua cabang.</p>
+<p id="branch_ids">Owner otomatis dapat mengakses semua cabang.</p>
 <?php else: ?>
 <form method="post" action="/pengguna/<?= $this->e($id) ?>/cabang" class="stack">
 <input type="hidden" name="_csrf" value="<?= $this->e($csrf) ?>">
-<fieldset class="fieldset stack-sm">
+<fieldset class="fieldset stack-sm" id="branch_ids" tabindex="-1">
 <legend>Cabang yang dapat diakses</legend>
 <?php foreach ($branches as $branch): ?>
 <?php $locked = (bool) $branch['locked']; $checked = (bool) $branch['checked']; ?>
@@ -85,7 +85,7 @@ $status = (string) $target['status'];
 <?php endif; ?>
 </section>
 
-<section class="card stack max-w-2xl" aria-labelledby="status-akun">
+<section class="card stack max-w-2xl" id="status" tabindex="-1" aria-labelledby="status-akun">
 <h2 class="card__title" id="status-akun">Status akun</h2>
 <?php if ($status === 'pending_verification'): ?>
 <form method="post" action="/pengguna/<?= $this->e($id) ?>/kirim-ulang-undangan">

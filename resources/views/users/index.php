@@ -21,7 +21,7 @@
 <?php endif; ?>
 </div>
 <?= $this->partial('flash', ['notice' => $notice, 'error' => $error]) ?>
-<div class="table-wrap">
+<div class="table-wrap" tabindex="0" role="region" aria-label="Daftar pengguna">
 <table class="table-data">
 <caption>Daftar pengguna</caption>
 <thead>

@@ -29,7 +29,7 @@
 <?php endif; ?>
 </div>
 <?php else: ?>
-<div class="table-wrap">
+<div class="table-wrap" tabindex="0" role="region" aria-label="Daftar cabang">
 <table class="table-data">
 <caption>Daftar cabang</caption>
 <thead>

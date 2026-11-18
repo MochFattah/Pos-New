@@ -68,6 +68,9 @@ abstract class PageFixtures extends UserHarness
             $pages[$uri] = $this->get($uri);
         }
         $pages['POST /cabang (gagal)'] = $this->send('POST', '/cabang', ['code' => '', 'name' => ''])->body();
+        $pages['POST /role (gagal)'] = $this->send('POST', '/role', ['name' => ''])->body();
+        $pages['POST /pengaturan (gagal)'] = $this->send('POST', '/pengaturan', ['business_name' => '', 'name' => ''])->body();
+        $pages['POST /pengguna/{id} (gagal)'] = $this->send('POST', '/pengguna/' . $staff, ['name' => '', 'phone' => 'x'])->body();
         $pages['POST /pengguna/undang (gagal)'] = $this->send('POST', '/pengguna/undang', ['name' => '', 'email' => ''])->body();
 
         foreach ([403, 404, 419, 422, 429, 500, 418] as $status) {

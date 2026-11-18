@@ -195,6 +195,75 @@ final class ViewTest extends PageFixtures
         return $this->send('POST', '/daftar', ['owner_name' => '', 'email' => 'x', 'password' => '', 'business_name' => ''])->body();
     }
 
+    /** Setiap tautan #x di ringkasan galat harus menunjuk elemen ber-id di dokumen yang sama (kalau tidak, tautan mati). */
+    public function testEveryErrorSummaryLinkResolvesToAnElementId(): void
+    {
+        $pages = $this->renderAllPages();
+        $keys = ['name' => 'a', 'phone' => 'b', 'role_ids' => 'c', 'branch_ids' => 'd', 'status' => 'e', 'form' => 'f'];
+        $pages['users/edit (semua kunci galat)'] = View::render('users/edit', [
+            'title' => 'Ubah', 'target' => ['id' => 5, 'is_owner' => 0, 'status' => 'active', 'email' => 'a@b.c', 'name' => 'A', 'email_verified_at' => '2026-01-01'],
+            'roles' => [['id' => 1, 'name' => 'Kasir', 'locked' => false, 'checked' => true]],
+            'branches' => [['id' => 2, 'name' => 'Pusat', 'code' => 'PST', 'locked' => false, 'checked' => false]],
+            'isSelf' => false, 'errors' => $keys, 'old' => ['name' => 'A', 'phone' => ''], 'csrf' => 'x', 'notice' => null, 'error' => null,
+        ]);
+        $checked = 0;
+        foreach ($pages as $name => $html) {
+            $x = $this->dom($html);
+            foreach ($x->query('//*[@id="error-summary"]//a[starts-with(@href,"#")]') as $a) {
+                /** @var DOMElement $a */
+                $id = rawurldecode(substr($a->getAttribute('href'), 1));
+                $this->assertTrue($x->query('//*[@id="' . $id . '"]')->length === 1, "$name: tautan ringkasan galat #$id tidak punya elemen ber-id");
+                $checked++;
+            }
+        }
+        $this->assertTrue($checked >= 15, "Terlalu sedikit tautan galat yang diperiksa ($checked)");
+    }
+
+    public function testTablesHaveCaptionAndScopedHeaders(): void
+    {
+        $tables = 0;
+        foreach ($this->renderAllPages() as $name => $html) {
+            $x = $this->dom($html);
+            foreach ($x->query('//table') as $table) {
+                $tables++;
+                $this->assertTrue($x->query('./caption[normalize-space()!=""]', $table)->length === 1, "$name: tabel tanpa <caption>");
+                foreach ($x->query('.//th', $table) as $th) {
+                    /** @var DOMElement $th */
+                    $this->assertTrue(in_array($th->getAttribute('scope'), ['col', 'row'], true), "$name: <th> tanpa scope: " . trim($th->textContent));
+                }
+            }
+        }
+        $this->assertTrue($tables >= 3, 'Tabel harus ikut dirender');
+    }
+
+    public function testHeadingLevelsDoNotSkip(): void
+    {
+        foreach ($this->renderAllPages() as $name => $html) {
+            $prev = 0;
+            foreach ($this->dom($html)->query('//h1|//h2|//h3|//h4|//h5|//h6') as $h) {
+                /** @var DOMElement $h */
+                $level = (int) substr($h->tagName, 1);
+                $this->assertTrue($prev === 0 ? $level === 1 : $level <= $prev + 1, "$name: urutan heading melompat ke <{$h->tagName}> setelah h$prev: " . trim($h->textContent));
+                $prev = $level;
+            }
+        }
+    }
+
+    public function testScrollableTableWrapIsKeyboardReachable(): void
+    {
+        $found = 0;
+        foreach ($this->renderAllPages() as $name => $html) {
+            foreach ($this->dom($html)->query('//*[contains(concat(" ", normalize-space(@class), " "), " table-wrap ")]') as $w) {
+                /** @var DOMElement $w */
+                $found++;
+                $this->assertSame('0', $w->getAttribute('tabindex'), "$name: .table-wrap tabindex=0");
+                $this->assertSame('region', $w->getAttribute('role'), "$name: .table-wrap role=region");
+                $this->assertTrue(trim($w->getAttribute('aria-label')) !== '', "$name: .table-wrap perlu aria-label");
+            }
+        }
+        $this->assertTrue($found >= 3, '.table-wrap harus dirender');
+    }
+
     // --- Tanpa inline ---
 
     public function testNoInlineScriptOrInlineEventHandlers(): void
