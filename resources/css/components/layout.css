@@ -56,7 +56,7 @@
     @media (min-width: 1024px) {
         .app-shell { grid-template-columns: 16rem 1fr; grid-template-rows: auto 1fr; }
         .app-shell > .sidebar { grid-row: 1 / span 2; position: sticky; top: 0; height: 100vh; height: 100dvh; }
-        .sidebar-scrim, .topbar__menu { display: none; }
+        .sidebar-scrim, .app-shell .topbar__menu { display: none; }
     }
 
     .card {

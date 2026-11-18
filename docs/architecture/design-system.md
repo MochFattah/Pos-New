@@ -13,7 +13,7 @@ node scripts/check-contrast.mjs   # tabel kontras; --json untuk mesin
 
 `build-css.mjs` mencari paket `tailwindcss` lewat `require.resolve` (cwd dan proyek), `TAILWIND_MODULES`,
 `NODE_PATH`, `npm root -g`, lalu `/opt/npm-tools/node_modules`; bila tak ada, mencetak daftar lokasi yang dicoba.
-Kandidat kelas dipindai dari `resources/views/**/*.php` dan `resources/js/**/*.js`. CSS hasil build dikomit;
+Kandidat kelas dipindai dari `resources/views/**/*.php` dan `public/assets/js/**/*.js`. CSS hasil build dikomit;
 jalankan ulang build setiap mengubah `resources/css/**` atau kelas utilitas di view (tes `CssBuildTest` mendeteksi build usang).
 
 ## Token

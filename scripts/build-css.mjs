@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Kompilasi resources/css/app.css dengan API Node tailwindcss lokal (tanpa CLI, tanpa jaringan).
-// Kandidat kelas dipindai dari resources/views/**/*.php dan resources/js/**/*.js.
+// Kandidat kelas dipindai dari resources/views/**/*.php dan public/assets/js/**/*.js.
 // Lokasi paket: require.resolve (cwd/proyek), TAILWIND_MODULES, NODE_PATH, root global npm, /opt/npm-tools.
 // Pakai: node scripts/build-css.mjs [--no-minify] [--out=<berkas>]
 // Batas: minifier berbasis regex tidak memahami string; spasi ganda atau karakter { } ; , > di dalam
@@ -52,7 +52,7 @@ function walk(dir, exts, out = []) {
 }
 
 const candidates = new Set();
-for (const file of [...walk(join(root, 'resources/views'), ['.php']), ...walk(join(root, 'resources/js'), ['.js'])]) {
+for (const file of [...walk(join(root, 'resources/views'), ['.php']), ...walk(join(root, 'public/assets/js'), ['.js'])]) {
     for (const token of readFileSync(file, 'utf8').split(/[\s"'`<>=(){};,]+/)) {
         if (token && token.length < 100 && /^[!a-zA-Z0-9\-_:/.\[\]%#@&*]+$/.test(token)) candidates.add(token);
     }

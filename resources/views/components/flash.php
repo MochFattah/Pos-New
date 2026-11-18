@@ -7,7 +7,7 @@
  */
 ?>
 <?php if (($notice ?? null) !== null): ?>
-<div class="alert alert-success" role="status"><?= $this->e($notice) ?></div>
+<div class="alert alert-success" role="status" data-flash="notice"><?= $this->e($notice) ?></div>
 <?php endif; ?>
 <?php if (($error ?? null) !== null): ?>
 <div class="alert alert-danger" role="alert"><?= $this->e($error) ?></div>

@@ -1,6 +1,8 @@
 @layer components {
     /* <dialog class="dialog-panel"> */
     .dialog-panel {
+        /* Preflight Tailwind membuang margin:auto bawaan <dialog>; tanpa ini panel menempel di pojok kiri atas. */
+        margin: auto;
         width: min(32rem, calc(100vw - 2 * var(--space-4)));
         max-height: calc(100dvh - 2 * var(--space-4));
         padding: var(--space-6);
