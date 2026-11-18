@@ -39,8 +39,8 @@
 <?php foreach ($users as $row): ?>
 <?php $isOwner = (int) $row['is_owner'] === 1; ?>
 <tr>
-<th scope="row"><?= $this->e($row['name']) ?><?php if ($isOwner): ?> <span class="badge badge-info">Owner</span><?php endif; ?></th>
-<td><?= $this->e($row['email']) ?></td>
+<th scope="row" class="cell-wrap"><?= $this->e($row['name']) ?><?php if ($isOwner): ?> <span class="badge badge-info">Owner</span><?php endif; ?></th>
+<td class="cell-wrap"><?= $this->e($row['email']) ?></td>
 <td><?= $this->e(implode(', ', $row['role_names'])) ?></td>
 <td><?= $this->partial('status-badge', ['status' => (string) $row['status']]) ?></td>
 <?php if ($canManage): ?>

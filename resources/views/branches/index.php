@@ -49,8 +49,8 @@
 <?php $isActive = $branch['status'] === 'active'; $isMain = (int) $branch['is_main'] === 1; ?>
 <tr>
 <th scope="row"><?= $this->e($branch['code']) ?></th>
-<td><?= $this->e($branch['name']) ?><?php if ($isMain): ?> <span class="badge badge-info">Utama</span><?php endif; ?></td>
-<td><?= $this->e($branch['address'] ?? '') ?></td>
+<td class="cell-wrap"><?= $this->e($branch['name']) ?><?php if ($isMain): ?> <span class="badge badge-info">Utama</span><?php endif; ?></td>
+<td class="cell-wrap"><?= $this->e($branch['address'] ?? '') ?></td>
 <td><?= $this->e($branch['phone'] ?? '') ?></td>
 <td><?= $this->partial('status-badge', ['status' => (string) $branch['status']]) ?></td>
 <?php if ($canManage): ?>

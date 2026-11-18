@@ -22,7 +22,7 @@
         background: var(--color-surface);
         border-bottom: 1px solid var(--color-border);
     }
-    .topbar__title { font-weight: var(--weight-semibold); margin-inline-end: auto; min-width: 0; overflow-wrap: anywhere; }
+    .topbar__title { font-weight: var(--weight-semibold); margin-inline-end: auto; flex: 1 1 8rem; min-width: 0; overflow-wrap: anywhere; }
     .topbar__actions { display: flex; align-items: center; gap: var(--space-2); }
 
     .sidebar {
@@ -47,9 +47,9 @@
             width: min(18rem, 86vw);
             transform: translateX(-100%);
             transition: transform 0.2s ease;
-            box-shadow: var(--shadow-overlay);
         }
-        .sidebar[data-open="true"], .sidebar:target { transform: translateX(0); }
+        /* Bayangan hanya saat terbuka; saat tertutup ia bocor sebagai gradien di tepi kiri layar. */
+        .sidebar[data-open="true"], .sidebar:target { transform: translateX(0); box-shadow: var(--shadow-overlay); }
         .sidebar-scrim { position: fixed; inset: 0; z-index: 30; background: var(--scrim); }
         .sidebar-scrim[hidden] { display: none; }
     }

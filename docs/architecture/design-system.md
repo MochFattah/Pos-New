@@ -16,6 +16,25 @@ node scripts/check-contrast.mjs   # tabel kontras; --json untuk mesin
 Kandidat kelas dipindai dari `resources/views/**/*.php` dan `public/assets/js/**/*.js`. CSS hasil build dikomit;
 jalankan ulang build setiap mengubah `resources/css/**` atau kelas utilitas di view (tes `CssBuildTest` mendeteksi build usang).
 
+## JavaScript
+
+`public/assets/js/` adalah satu-satunya sumber (tanpa langkah build, tanpa dependensi, tanpa script inline; CSP `script-src 'self'`).
+`theme.js` dimuat sinkron di `<head>` (mencegah kilatan tema; `localStorage` dalam try/catch); `app.js` dimuat `type="module"`
+dan menginisialisasi modul: `drawer.js` (aria-expanded, perangkap fokus, Esc, klik scrim, fokus kembali, `inert` pada latar; tanpa JS
+drawer tetap terbuka lewat `:target`), `dialog.js` (`<dialog>` modal untuk aksi destruktif; tanpa JS form POST biasa tetap terkirim),
+`toast.js` (region aria-live, flash menjadi toast, otomatis hilang 6 detik, berhenti saat hover/fokus, tombol tutup),
+`form-submit.js` (cegah kirim ganda lewat `aria-busy`, teks tombol dipertahankan, pulih saat `pageshow`; fokus ke ringkasan galat,
+tautannya memfokuskan field), `focusable.js` (pembantu bersama). Gerak mengikuti `prefers-reduced-motion`.
+Kelas yang dipakai JS (`classList`, `className`, selektor `.kelas`) dipindai pemindai drift (`ViewTest`) dan Tailwind (`build-css.mjs`).
+
+```
+node scripts/test-js.mjs       # tes perilaku di Chromium (Playwright), offline; juga dijalankan JsBehaviorTest (SKIP bila tak tersedia)
+node scripts/screenshots.mjs   # PNG di storage/cache/screens/ (gitignored) + cek scroll horizontal 375 dan galat konsol
+```
+
+Keduanya memakai `scripts/dump-pages.php` (halaman dirender PHP lewat harness tes, SQLite memori) dan server statis
+`scripts/lib/static-server.mjs`. Batas: ini bukan uji end-to-end dengan MySQL/server nyata; data berupa fixture.
+
 ## Token
 
 Tema gelap: `:root[data-theme="dark"]`, dan `@media (prefers-color-scheme: dark)` dengan `:root:not([data-theme="light"])`
