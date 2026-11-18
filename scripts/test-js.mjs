@@ -212,11 +212,17 @@ await test('form: kirim ganda dicegah, aria-busy dipasang, teks dipertahankan, p
     await page.fill('#password', 'rahasia-banget');
     const btn = page.locator('form button[type="submit"]').first();
     const text = (await btn.textContent()).trim();
-    // Tiga upaya kirim berturut-turut dalam satu tick (klik ganda + Enter) sebelum navigasi sempat dimulai.
-    await btn.evaluate((el) => { el.click(); el.click(); el.form.requestSubmit(el); });
-    assert((await btn.getAttribute('aria-busy')) === 'true', 'aria-busy saat mengirim');
-    assert((await btn.getAttribute('aria-disabled')) === 'true', 'aria-disabled saat mengirim');
-    assert((await btn.textContent()).trim() === text, 'teks tombol dipertahankan');
+    // Tiga upaya kirim berturut-turut dalam satu tick (klik ganda + Enter); status dibaca di tick yang sama
+    // karena respons server (POST /masuk) bisa tiba dan mengganti dokumen sebelum pembacaan terpisah.
+    const state = await btn.evaluate((el) => {
+        el.click();
+        el.click();
+        el.form.requestSubmit(el);
+        return { busy: el.getAttribute('aria-busy'), disabled: el.getAttribute('aria-disabled'), text: el.textContent.trim() };
+    });
+    assert(state.busy === 'true', 'aria-busy saat mengirim');
+    assert(state.disabled === 'true', 'aria-disabled saat mengirim');
+    assert(state.text === text, 'teks tombol dipertahankan');
     await page.waitForLoadState('load');
     await page.waitForTimeout(600);
     assert(posts('/masuk').length === 1, `tepat 1 POST /masuk, dapat ${posts('/masuk').length}`);

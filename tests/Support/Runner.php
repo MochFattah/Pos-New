@@ -74,6 +74,9 @@ final class Runner
             $case->$method();
             $result['passed']++;
             $result['lines'][] = "PASS  $name";
+        } catch (SkippedException $e) {
+            $result['passed']++;
+            $result['lines'][] = "SKIP  $name\n      " . $e->getMessage();
         } catch (Throwable $e) {
             $result['failed']++;
             $result['lines'][] = "FAIL  $name\n      " . $e::class . ': ' . $e->getMessage();

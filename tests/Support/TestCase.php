@@ -27,6 +27,12 @@ abstract class TestCase
         $this->tearDown();
     }
 
+    /** Melewati tes (dihitung lulus, dicetak SKIP beserta alasannya). */
+    protected function skip(string $reason): never
+    {
+        throw new SkippedException($reason);
+    }
+
     protected function assertSame(mixed $expected, mixed $actual, string $message = ''): void
     {
         if ($expected !== $actual) {

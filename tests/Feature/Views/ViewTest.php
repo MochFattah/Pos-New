@@ -317,6 +317,29 @@ final class ViewTest extends PageFixtures
                 $check(basename(dirname($file)) . '/' . basename($file), (string) preg_replace('/\{\{.*?\}\}/', ' ', $value));
             }
         }
+        // Kelas yang dipakai modul JS: classList.add/remove/toggle/contains('..'), className = '..', selektor '.kelas'.
+        foreach ((array) glob(self::ROOT . '/public/assets/js/*.js') as $jsFile) {
+            $js = (string) file_get_contents($jsFile);
+            $found = [];
+            preg_match_all('/classList\.(?:add|remove|toggle|contains)\(([^)]*)\)/', $js, $calls);
+            foreach ($calls[1] as $args) {
+                preg_match_all('/[\'"]([^\'"]+)[\'"]/', $args, $lits);
+                $found = [...$found, ...$lits[1]];
+            }
+            preg_match_all('/className\s*=\s*[\'"]([^\'"]+)[\'"]/', $js, $cn);
+            $found = [...$found, ...$cn[1]];
+            // Nilai peta/objek yang dipakai sebagai kelas (mis. TOAST_CLASS) ditulis sebagai literal 'toast-...'.
+            preg_match_all('/[\'"](toast[a-z-]*|btn[a-z-]*|nav-item[a-z-]*)[\'"]/', $js, $named);
+            $found = [...$found, ...$named[1]];
+            preg_match_all('/querySelector(?:All)?\([\'"]([^\'"]+)[\'"]\)/', $js, $sel);
+            foreach ($sel[1] as $selector) {
+                preg_match_all('/\.([A-Za-z_][A-Za-z0-9_-]*)/', (string) preg_replace('/\[[^\]]*\]/', '', $selector), $dots);
+                $found = [...$found, ...$dots[1]];
+            }
+            foreach ($found as $value) {
+                $check('js/' . basename($jsFile), $value);
+            }
+        }
         foreach ($this->renderAllPages() as $name => $html) {
             foreach ($this->dom($html)->query('//@class') as $attr) {
                 $check($name, $attr->nodeValue);
