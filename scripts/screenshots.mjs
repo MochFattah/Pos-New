@@ -21,7 +21,7 @@ dumpPages(outDir);
 const server = await startServer({ outDir });
 
 const PAGES = [
-    ['login', '/masuk'], ['daftar', '/daftar'], ['beranda', '/beranda'], ['cabang', '/cabang'],
+    ['landing', '/'], ['login', '/masuk'], ['daftar', '/daftar'], ['beranda', '/beranda'], ['cabang', '/cabang'],
     ['pengguna', '/pengguna'], ['role', '/role'], ['pengaturan', '/pengaturan'],
     ['demo-berakhir', '/demo-berakhir', true], ['platform-masuk', '/__page/platform-masuk'],
 ];

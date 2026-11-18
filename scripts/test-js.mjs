@@ -164,6 +164,16 @@ await test('drawer: desktop menampilkan sidebar tanpa inert dan tanpa tombol Men
     assert(await page.locator('#navigasi a.nav-item').first().isVisible(), 'menu terlihat');
 });
 
+await test('layout: sidebar desktop menempel dan setinggi viewport saat halaman panjang digulir', async (page) => {
+    await go(page, '/pengaturan');
+    await page.evaluate(() => { const m = document.querySelector('#main-content'); const pad = document.createElement('div'); pad.style.height = '3000px'; m.append(pad); });
+    const before = await page.locator('#navigasi').boundingBox();
+    assert(Math.abs(before.height - DESKTOP.height) <= 1, 'tinggi sidebar harus = viewport, dapat ' + before.height);
+    await page.evaluate(() => window.scrollTo(0, 1500));
+    const after = await page.locator('#navigasi').boundingBox();
+    assert(Math.abs(after.y) <= 1 && Math.abs(after.height - DESKTOP.height) <= 1, `sidebar harus menempel di atas setelah gulir, y=${after.y} h=${after.height}`);
+});
+
 await test('drawer: tanpa JS tetap bisa dibuka lewat :target', async (page) => {
     await go(page, '/beranda');
     await page.locator('[data-drawer-open]').click();

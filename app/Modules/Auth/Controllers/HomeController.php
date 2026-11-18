@@ -42,7 +42,7 @@ final class HomeController
         if ($session instanceof Session && is_int($session->get(AuthService::SESSION_USER))) {
             return Response::redirect('/beranda');
         }
-        return Response::html(View::render('home/landing', ['title' => 'Kasir dan kelola toko Anda', 'cardClass' => 'auth-card--wide']));
+        return Response::html(View::render('home/landing', ['title' => 'Aplikasi kasir untuk usaha ritel', 'cardClass' => 'auth-card--wide']));
     }
 
     /** Sisa waktu dalam bahasa sederhana: "3 hari 4 jam", "5 jam 10 menit", atau "kurang dari 1 menit". */
