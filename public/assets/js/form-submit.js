@@ -20,14 +20,17 @@ function initDoubleSubmit() {
     document.addEventListener('submit', (event) => {
         const form = event.target;
         if (!(form instanceof HTMLFormElement) || event.defaultPrevented) return;
-        if (form.target === '_blank' || form.hasAttribute('data-no-busy')) return;
+        const submitter = event.submitter instanceof HTMLElement ? event.submitter : null;
+        // Kirim ke jendela/bingkai lain (target form atau formtarget tombol selain _self) tidak menavigasi halaman ini: jangan kunci.
+        const target = (submitter?.getAttribute('formtarget') ?? form.getAttribute('target') ?? '').toLowerCase();
+        if ((target !== '' && target !== '_self') || form.hasAttribute('data-no-busy')) return;
         if (busyForms.has(form)) {
             event.preventDefault();
             return;
         }
         busyForms.add(form);
         form.setAttribute('aria-busy', 'true');
-        const button = event.submitter instanceof HTMLElement ? event.submitter : form.querySelector('button[type="submit"], input[type="submit"]');
+        const button = submitter ?? form.querySelector('button[type="submit"], input[type="submit"]');
         if (button) {
             button.setAttribute('aria-busy', 'true');
             button.setAttribute('aria-disabled', 'true');
@@ -55,7 +58,9 @@ function initErrorSummary() {
     summary.addEventListener('click', (event) => {
         const link = event.target instanceof Element ? event.target.closest('a[href^="#"]') : null;
         if (!link) return;
-        if (focusField(decodeURIComponent(link.getAttribute('href').slice(1)))) event.preventDefault();
+        let id = link.getAttribute('href').slice(1);
+        try { id = decodeURIComponent(id); } catch { /* href tak valid: pakai apa adanya */ }
+        if (focusField(id)) event.preventDefault();
     });
 }
 

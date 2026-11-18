@@ -4,12 +4,25 @@ import { focusableIn, restoreFocus } from './focusable.js';
 
 const MOBILE = '(max-width: 1023.98px)';
 
+/** Dengan JS, tautan fallback diganti <button> sungguhan (Spasi dan Enter bekerja; tanpa role buatan). Atribut dan anak dipindahkan apa adanya. */
+function toButton(link) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    for (const { name, value } of link.attributes) {
+        if (name !== 'href') button.setAttribute(name, value);
+    }
+    button.append(...link.childNodes);
+    link.replaceWith(button);
+    return button;
+}
+
 export function initDrawer() {
     const drawer = document.querySelector('[data-drawer]');
-    const opener = document.querySelector('[data-drawer-open]');
-    if (!drawer || !opener) return;
+    const link = document.querySelector('[data-drawer-open]');
+    if (!drawer || !link) return;
+    const opener = link instanceof HTMLAnchorElement ? toButton(link) : link;
     const scrim = document.querySelector('[data-drawer-scrim]');
-    const closers = [...document.querySelectorAll('[data-drawer-close]')];
+    const closers = [...document.querySelectorAll('[data-drawer-close]')].map((el) => (el instanceof HTMLAnchorElement ? toButton(el) : el));
     const background = [...document.querySelectorAll('.topbar, .app-shell__main')];
     const mq = window.matchMedia(MOBILE);
     let isOpen = false;
@@ -17,7 +30,6 @@ export function initDrawer() {
     // Muat ulang dengan #navigasi (fallback tanpa JS) akan membuka :target; hapus agar JS yang memegang kendali.
     if (location.hash === '#' + drawer.id) history.replaceState(null, '', location.pathname + location.search);
 
-    opener.setAttribute('role', 'button');
     opener.setAttribute('aria-expanded', 'false');
 
     function sync() {

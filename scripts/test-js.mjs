@@ -111,6 +111,23 @@ await test('drawer: buka/tutup, aria-expanded, fokus masuk, inert, Esc, fokus ke
     assert(await page.evaluate(() => !document.querySelector('#main-content').inert), 'latar tidak lagi inert');
 }, { viewport: MOBILE });
 
+await test('drawer: pembuka adalah <button> nyata dan Spasi/Enter membukanya', async (page) => {
+    await go(page, '/beranda');
+    const opener = page.locator('[data-drawer-open]');
+    assert((await opener.evaluate((el) => el.tagName)) === 'BUTTON', 'pembuka harus <button> saat JS aktif');
+    assert((await opener.getAttribute('role')) === null, 'tanpa role=button buatan');
+    assert((await opener.getAttribute('aria-controls')) === 'navigasi', 'aria-controls terbawa');
+    await opener.focus();
+    await page.keyboard.press('Space');
+    assert((await opener.getAttribute('aria-expanded')) === 'true', 'Spasi membuka drawer');
+    await page.keyboard.press('Escape');
+    assert((await opener.getAttribute('aria-expanded')) === 'false', 'Esc menutup');
+    assert((await active(page)) === 'Menu', 'fokus kembali ke tombol Menu');
+    await page.keyboard.press('Enter');
+    assert((await opener.getAttribute('aria-expanded')) === 'true', 'Enter membuka drawer');
+    assert(!page.url().includes('#'), 'URL tidak berubah hash');
+}, { viewport: MOBILE });
+
 await test('drawer: perangkap fokus (Tab dan Shift+Tab berputar di dalam drawer)', async (page) => {
     await go(page, '/beranda');
     await page.locator('[data-drawer-open]').click();
@@ -161,6 +178,23 @@ await test('drawer: gerak dikurangi (prefers-reduced-motion) menghapus transisi'
     const d = await page.locator('#navigasi').evaluate((el) => parseFloat(getComputedStyle(el).transitionDuration));
     assert(d <= 0.001, 'transition-duration harus ~0, dapat ' + d);
 }, { viewport: MOBILE, reducedMotion: 'reduce' });
+
+// --- Target sentuh ---
+await test('target sentuh: tautan mandiri (tabel role, halaman masuk) minimal 44px', async (page) => {
+    for (const [path, sel] of [['/role', '.table-data tbody th a'], ['/masuk', 'main p.stack-sm > a'], ['/daftar', 'main .stack-sm > a, main p > a']]) {
+        await go(page, path);
+        const heights = await page.locator(sel).evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+        assert(heights.length > 0, `${path}: tautan ${sel} tidak ditemukan`);
+        assert(heights.every((h) => h >= 43.9), `${path}: tinggi tautan < 44px: ${heights.join(', ')}`);
+    }
+}, { viewport: MOBILE });
+await test('target sentuh: .table-wrap dapat difokuskan dengan keyboard', async (page) => {
+    await go(page, '/role');
+    await page.keyboard.press('Tab');
+    const wrap = page.locator('.table-wrap');
+    await wrap.focus();
+    assert(await wrap.evaluate((el) => el === document.activeElement), 'wilayah tabel dapat difokuskan');
+}, { viewport: MOBILE });
 
 // --- Dialog ---
 const trigger = (page) => page.locator('form[data-confirm-dialog] button[type="submit"]').first();
@@ -233,6 +267,26 @@ await test('form: kirim ganda dicegah, aria-busy dipasang, teks dipertahankan, p
     assert((await again.getAttribute('aria-busy')) === null, 'aria-busy hilang setelah kembali');
     assert((await again.getAttribute('aria-disabled')) === null, 'aria-disabled hilang setelah kembali');
 });
+await test('form: submitter dengan formtarget bukan _self tidak mengunci form', async (page) => {
+    await go(page, '/masuk');
+    const busy = await page.evaluate(() => {
+        const form = document.querySelector('main form');
+        const btn = form.querySelector('button[type="submit"]');
+        btn.setAttribute('formtarget', '_blank');
+        document.addEventListener('submit', (e) => e.preventDefault(), { once: true });
+        form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true, submitter: btn }));
+        return [form.getAttribute('aria-busy'), btn.getAttribute('aria-busy')];
+    });
+    assert(busy[0] === null && busy[1] === null, 'formtarget=_blank tidak boleh memasang aria-busy: ' + busy.join(','));
+});
+await test('galat validasi: href ringkasan dengan % tak valid tidak melempar galat', async (page) => {
+    await go(page, '/masuk');
+    await page.evaluate(() => { document.querySelector('main form').noValidate = true; });
+    await page.locator('main form button[type="submit"]').click();
+    await page.waitForSelector('#error-summary');
+    await page.evaluate(() => { document.querySelector('#error-summary a[href^="#"]').setAttribute('href', '#%E0%A4%A'); });
+    await page.locator('#error-summary a[href^="#"]').first().click(); // pageerror akan menggagalkan tes
+});
 await test('form: pageshow dari bfcache melepas status sibuk', async (page) => {
     await go(page, '/masuk');
     await page.evaluate(() => document.querySelector('form').addEventListener('submit', (e) => e.preventDefault(), { once: false, capture: false }));
@@ -304,6 +358,31 @@ await test('tema: localStorage diblokir tidak merusak halaman atau toggle', asyn
     await page.locator('[data-theme-toggle]').click();
     assert((await page.locator('html').getAttribute('data-theme')) === 'dark', 'tema tetap berlaku untuk sesi ini');
 }, { init: () => Object.defineProperty(window, 'localStorage', { get() { throw new DOMException('diblokir', 'SecurityError'); } }) });
+await test('tema: skrip tema tidak menambah global (window maupun leksikal)', async (page) => {
+    await go(page, '/beranda');
+    const extra = await page.evaluate(() => {
+        const frame = document.createElement('iframe');
+        document.body.appendChild(frame);
+        const base = new Set(Object.getOwnPropertyNames(frame.contentWindow));
+        frame.remove();
+        const lexical = ['KEY', 'initial', 'stored', 'systemTheme', 'apply'].filter((n) => { try { (0, eval)(n); return true; } catch { return false; } });
+        return { props: Object.getOwnPropertyNames(window).filter((k) => !base.has(k) && !/^(webkit|__)/.test(k)), lexical };
+    });
+    assert(extra.lexical.length === 0, 'global leksikal bocor: ' + extra.lexical.join(', '));
+    assert(extra.props.length === 0, 'properti window baru: ' + extra.props.join(', '));
+});
+await test('tema: keadaan tekan tombol tema terlihat berbeda (bukan hanya aria-pressed)', async (page) => {
+    await go(page, '/beranda');
+    const toggle = page.locator('[data-theme-toggle]');
+    const look = () => toggle.evaluate((el) => { const c = getComputedStyle(el); return [c.backgroundColor, c.borderTopColor, c.color, c.fontWeight].join('|'); });
+    await toggle.evaluate((el) => el.setAttribute('aria-pressed', 'false'));
+    await page.waitForTimeout(300); // lewati transisi warna
+    const off = await look();
+    await toggle.evaluate((el) => el.setAttribute('aria-pressed', 'true'));
+    await page.waitForTimeout(300);
+    const on = await look();
+    assert(off !== on, 'tampilan tombol harus berbeda saat aria-pressed=true, sama: ' + on);
+});
 await test('tema: tanpa JS tombol tema tersembunyi dan halaman tetap terbaca', async (page) => {
     await go(page, '/beranda');
     assert(!(await page.locator('[data-theme-toggle]').isVisible()), 'tombol tema memerlukan JS');

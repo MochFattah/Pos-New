@@ -29,6 +29,8 @@
     .btn-tertiary { background: transparent; color: var(--color-primary); }
     .btn-tertiary:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--color-primary-subtle); }
     .btn-tertiary:disabled { color: var(--color-text-muted); }
+    /* Tombol tombol-ganda (mis. tema): keadaan tekan harus terlihat, bukan hanya aria-pressed. */
+    .btn[aria-pressed="true"] { background: var(--color-primary-subtle); border-color: var(--color-primary); color: var(--color-primary); }
 
     .btn-danger { background: var(--color-danger); color: var(--color-on-danger); }
     .btn-danger:hover:not(:disabled):not([aria-disabled="true"]),
