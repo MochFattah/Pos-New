@@ -109,6 +109,12 @@ final class Request
         return $this->data[$key] ?? $this->query[$key] ?? $default;
     }
 
+    /** Hanya dari badan permintaan (POST), tidak pernah dari query string; untuk rahasia yang tak boleh ada di URL. */
+    public function form(string $key, mixed $default = null): mixed
+    {
+        return $this->data[$key] ?? $default;
+    }
+
     /**
      * @return array<string, mixed>
      */

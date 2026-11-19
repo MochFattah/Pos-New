@@ -1,0 +1,49 @@
+# CADANGAN untuk hosting yang document root-nya tidak bisa diarahkan ke public/.
+# Cara yang benar dan lebih aman: arahkan document root ke public/ (lihat docs/deployment/cpanel.md).
+# Berkas ini meneruskan permintaan ke public/ dan memblokir kode, konfigurasi, dan rahasia di root.
+# Hanya untuk pemasangan di akar domain (bukan subfolder URL).
+
+Options -Indexes -MultiViews
+
+# Tanpa mod_rewrite aplikasi tidak dapat berjalan; gagal tertutup agar tidak ada berkas yang terbuka.
+<IfModule !mod_rewrite.c>
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</IfModule>
+
+# Berkas rahasia/konfigurasi di root, juga bila mod_rewrite tersedia (lapisan kedua).
+<FilesMatch "^(\.env.*|\.git.*|\.php-cs-fixer.*|composer\..*|package.*\.json|phpunit\.xml.*|phpstan\.neon.*|.*\.(md|sql|log|lock|bak|dist|ya?ml))$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Permintaan yang sudah diarahkan ke public/ tidak diproses ulang oleh aturan di bawah.
+    RewriteRule ^public/ - [L]
+
+    # Blokir folder kode, konfigurasi, data, dan alat (403).
+    RewriteRule ^(app|bootstrap|config|database|routes|storage|tests|scripts|resources|docs|vendor|node_modules|\.git|\.superpowers)(/|$) - [F,NC,L]
+
+    # Blokir dotfile (kecuali .well-known) dan berkas rahasia/dokumen di root.
+    RewriteRule (^|/)\.(?!well-known/) - [F,L]
+    RewriteRule ^(composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml(\.dist)?|phpstan\.neon(\.dist)?|[^/]*\.(md|sql|log|lock|bak|dist|ya?ml))$ - [F,NC,L]
+
+    # Aset statis dilayani langsung dari public/.
+    RewriteCond %{DOCUMENT_ROOT}/public/$1 -f
+    RewriteRule ^(.*)$ public/$1 [L]
+
+    # Selebihnya ke front controller.
+    RewriteRule ^ public/index.php [L]
+</IfModule>

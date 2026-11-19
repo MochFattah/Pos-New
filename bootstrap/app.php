@@ -31,6 +31,10 @@ use App\Modules\Platform\Controllers\PlatformDashboardController;
 use App\Modules\Platform\Repositories\PlatformUserRepository;
 use App\Modules\Platform\Services\PlatformAuthService;
 use App\Modules\Auth\Controllers\HomeController;
+use App\Modules\Install\InstallAttemptLimiter;
+use App\Modules\Install\InstallController;
+use App\Modules\Install\InstallService;
+use App\Modules\Install\PreflightChecker;
 use App\Modules\Branches\Controllers\BranchController;
 use App\Modules\Branches\Repositories\BranchRepository;
 use App\Modules\Branches\Services\BranchService;
@@ -271,7 +275,26 @@ $buildSettingsController = static function () use ($buildAuditLogger, $sharedDb,
     );
 };
 
-$buildRouter = static function () use ($basePath, $buildSettingsController, $buildGlobalMiddleware, $buildRegisterController, $buildAuthService, $buildPlatformAuthService, $buildPasswordResetController, $buildBranchController, $buildUserController, $buildInvitationController, $buildRoleController, $sharedDb, $sharedPolicy): Router {
+/** Penginstal satu kali; koneksi DB dibuat malas hanya saat pemasangan berjalan. */
+$buildInstallService = static function () use ($basePath): InstallService {
+    $migrations = $basePath . '/database/migrations';
+    return new InstallService(
+        $basePath . '/storage/installed.lock',
+        (string) Config::get('security.install_token', ''),
+        static fn (): Connection => Connection::fromConfig(),
+        $migrations,
+        new PreflightChecker($basePath, $migrations),
+        $basePath . '/storage/logs/install.log',
+        array_map('strval', array_filter([
+            Config::get('database.password'),
+            Config::get('database.user'),
+            Config::get('database.host'),
+            Config::get('database.name'),
+        ], static fn (mixed $v): bool => is_string($v) && $v !== ''))
+    );
+};
+
+$buildRouter = static function () use ($basePath, $buildInstallService, $buildSettingsController, $buildGlobalMiddleware, $buildRegisterController, $buildAuthService, $buildPlatformAuthService, $buildPasswordResetController, $buildBranchController, $buildUserController, $buildInvitationController, $buildRoleController, $sharedDb, $sharedPolicy): Router {
     PermissionMiddleware::provide($sharedPolicy);
     // Resolver: controller yang butuh layanan dirakit lewat builder-nya; sisanya dibuat tanpa argumen.
     $router = new Router(static fn (string $class): object => match ($class) {
@@ -283,6 +306,7 @@ $buildRouter = static function () use ($basePath, $buildSettingsController, $bui
         InvitationController::class => $buildInvitationController(),
         RoleController::class => $buildRoleController(),
         SettingsController::class => $buildSettingsController(),
+        InstallController::class => new InstallController($buildInstallService(), new InstallAttemptLimiter($basePath . '/storage/cache/install-attempts.json')),
         HomeController::class => new HomeController(new DemoService($sharedDb()), (string) Config::get('app.support_email', '')),
         AuthMiddleware::class => new AuthMiddleware($buildAuthService()),
         PlatformAuthController::class => new PlatformAuthController($buildPlatformAuthService()),
@@ -297,6 +321,9 @@ $buildRouter = static function () use ($basePath, $buildSettingsController, $bui
     }
     (require $basePath . '/routes/web.php')($router);
     (require $basePath . '/routes/platform.php')($router);
+    if ($buildInstallService()->isActive()) {
+        (require $basePath . '/routes/install.php')($router);
+    }
     return $router;
 };
 
