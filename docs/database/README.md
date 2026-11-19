@@ -23,3 +23,7 @@ Yang TIDAK dibandingkan: tipe kolom, nilai DEFAULT, nama constraint/indeks, inde
 ## Seeder referensi
 
 `App\Core\Database\Seeders\ReferenceDataSeeder::run(Connection)` (idempoten) mengisi 9 permission fondasi dan satu baris `demo_settings`. `database/seeders/reference_data.php` adalah pemuat tipis untuk installer.
+
+## Pemasangan dan migrasi
+
+`/install` (satu kali) dan `scripts/migrate.php` sama-sama menjalankan `Migrator` atas `database/migrations/*.sql` berurutan nama dan mencatatnya di `schema_migrations`. Tes penginstal memakai direktori migrasi fixture SQLite (salinan `schema.sqlite.sql`), bukan DDL MySQL. Lihat `docs/deployment/cpanel.md` untuk backup sebelum migrasi.

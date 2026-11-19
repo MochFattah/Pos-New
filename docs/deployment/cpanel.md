@@ -31,7 +31,7 @@ Penginstal tidak membuat `.env`. Salin `.env.example` menjadi `.env` di akar pro
 | `APP_TIMEZONE` | Bawaan `Asia/Jakarta` |
 | `SESSION_SECURE` | `true` (cookie Secure dan HSTS). Wajib `true` bila TLS diakhiri di proxy. Hosting harus memakai HTTPS. |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Dari langkah 4. Di cPanel nama database dan pengguna biasanya berawalan nama akun. |
-| `MAIL_DRIVER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_ENCRYPTION`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`, `MAIL_TIMEOUT`, `MAIL_EHLO_HOSTNAME` | Lihat langkah 7. |
+| `MAIL_DRIVER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_ENCRYPTION`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`, `MAIL_TIMEOUT`, `MAIL_EHLO_HOSTNAME`, `MAIL_LOG_PATH` (hanya driver log) | Lihat bagian 8. |
 | `INSTALL_TOKEN` | Isi string acak panjang (sekitar 32 karakter) hanya selama pemasangan; kosong = penginstal mati. |
 | `SUPPORT_EMAIL` | Opsional; ditampilkan di halaman bantuan. |
 

@@ -1,0 +1,12 @@
+# BELUM PERNAH dijalankan (PHPStan tidak terpasang di lingkungan pengembangan).
+# Mulai dari level rendah lalu naikkan bertahap; perbaiki temuan, jangan menambah baseline besar.
+parameters:
+    level: 5
+    paths:
+        - app
+        - bootstrap
+        - config
+        - routes
+    bootstrapFiles:
+        - bootstrap/autoload.php
+    tmpDir: storage/cache/phpstan
