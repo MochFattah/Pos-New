@@ -65,6 +65,9 @@ use App\Modules\Tenants\Services\TenantSettingsService;
 
 $basePath = dirname(__DIR__);
 
+// Jejak exception tidak boleh memuat argumen (mis. kata sandi DB pada PDO::__construct).
+ini_set('zend.exception_ignore_args', '1');
+
 Env::load($basePath . '/.env');
 Config::load($basePath);
 date_default_timezone_set((string) Config::get('app.timezone', 'Asia/Jakarta'));

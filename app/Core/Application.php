@@ -92,13 +92,39 @@ final class Application
             date('c'),
             $id,
             $request->method(),
-            $request->path(),
+            self::loggablePath($request->rawPath()),
             $e::class,
-            $e->getMessage(),
+            self::oneLine($e->getMessage()),
             $e->getFile(),
             $e->getLine(),
-            $e->getTraceAsString()
+            self::traceWithoutArgs($e)
         );
         @file_put_contents($this->logFile, $line, FILE_APPEND | LOCK_EX);
+    }
+
+    /** Path untuk log: karakter non-cetak jadi '?', segmen token rute dimasker (token sekali pakai tak boleh masuk log). */
+    private static function loggablePath(string $rawPath): string
+    {
+        $path = preg_replace('/[^\x20-\x7E]/', '?', $rawPath) ?? '?';
+        $path = preg_replace('#/(reset-password|verifikasi-email|undangan)/[^?]*#i', '/$1/***', $path) ?? '?';
+        return strlen($path) > 200 ? substr($path, 0, 200) . '...' : $path;
+    }
+
+    private static function oneLine(string $text): string
+    {
+        return preg_replace('/[\x00-\x1F\x7F]+/', ' ', $text) ?? '';
+    }
+
+    /** Jejak tanpa argumen: argumen dapat memuat kata sandi DB, token, atau data pengguna. */
+    private static function traceWithoutArgs(Throwable $e): string
+    {
+        $lines = [];
+        foreach ($e->getTrace() as $i => $frame) {
+            $where = isset($frame['file']) ? $frame['file'] . '(' . ($frame['line'] ?? 0) . ')' : '[internal function]';
+            $call = ($frame['class'] ?? '') . ($frame['type'] ?? '') . ($frame['function'] ?? '') . '()';
+            $lines[] = '#' . $i . ' ' . $where . ': ' . $call;
+        }
+        $lines[] = '#' . count($lines) . ' {main}';
+        return implode("\n", $lines);
     }
 }

@@ -151,4 +151,53 @@ final class RouterTest extends TestCase
         $this->assertContains('detail-debug', $res->body());
         $this->assertFalse(str_contains($res->body(), 'Stack trace'));
     }
+
+    public function testLogNeverContainsExceptionArgs(): void
+    {
+        $prev = ini_get('zend.exception_ignore_args');
+        ini_set('zend.exception_ignore_args', '0');
+        try {
+            $thrower = static function (string $password): void {
+                throw new RuntimeException('gagal koneksi');
+            };
+            $router = new Router();
+            $router->get('/boom', function () use ($thrower): Response {
+                $thrower('SUPER-SECRET-PASSWORD');
+                return Response::html('x');
+            });
+            (new Application($router, $this->log, false))->handle(Request::create('GET', '/boom'));
+        } finally {
+            ini_set('zend.exception_ignore_args', (string) $prev);
+        }
+        $logged = (string) file_get_contents($this->log);
+        $this->assertContains('gagal koneksi', $logged);
+        $this->assertContains('{main}', $logged);
+        $this->assertFalse(str_contains($logged, 'SUPER-SECRET-PASSWORD'));
+    }
+
+    public function testLogSanitisesPathAndMasksTokenSegments(): void
+    {
+        $router = new Router();
+        $router->get('/reset-password/{token}', function (): Response {
+            throw new RuntimeException('boom');
+        });
+        $router->get('/x', function (): Response {
+            throw new RuntimeException("baris1\nFORGED line");
+        });
+        $app = new Application($router, $this->log, false);
+        $app->handle(Request::create('GET', '/reset-password/TOKEN123abc'));
+        $app->handle(Request::create('GET', '/x'));
+        $logged = (string) file_get_contents($this->log);
+        $this->assertFalse(str_contains($logged, 'TOKEN123abc'));
+        $this->assertContains('/reset-password/***', $logged);
+        $this->assertFalse(str_contains($logged, "\nFORGED"));
+        foreach (explode("\n", $logged) as $line) {
+            $this->assertFalse(str_contains($line, "\x01"));
+        }
+        $m = new \ReflectionMethod(Application::class, 'loggablePath');
+        $m->setAccessible(true);
+        $this->assertSame('/x??/y', $m->invoke(null, "/x\x01\n/y"));
+        $this->assertSame('/undangan/***', $m->invoke(null, '/undangan/ABC%0Aforge'));
+        $this->assertSame('/verifikasi-email/***', $m->invoke(null, '/verifikasi-email/tok'));
+    }
 }
