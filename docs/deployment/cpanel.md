@@ -33,6 +33,7 @@ Penginstal tidak membuat `.env`. Salin `.env.example` menjadi `.env` di akar pro
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Dari langkah 4. Di cPanel nama database dan pengguna biasanya berawalan nama akun. |
 | `MAIL_DRIVER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_ENCRYPTION`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`, `MAIL_TIMEOUT`, `MAIL_EHLO_HOSTNAME`, `MAIL_ALLOW_LOG`, `MAIL_LOG_PATH` (hanya driver log) | Lihat bagian 8. |
 | `INSTALL_TOKEN` | Isi string acak panjang (sekitar 32 karakter) hanya selama pemasangan; kosong = penginstal mati. |
+| `TRUSTED_PROXIES` | Kosong (bawaan) bila situs diakses langsung. Bila di belakang CDN/proxy (mis. Cloudflare), isi IP/CIDR proxy dipisah koma agar IP klien dibaca dari `X-Forwarded-For`; tanpa ini semua pengguna tampak berbagi satu IP dan pembatas laju bisa mengunci semua orang. Lihat `docs/deployment/nginx.md`. |
 | `SUPPORT_EMAIL` | Opsional; ditampilkan di halaman bantuan. |
 
 Pembatas laju (opsional, sudah punya bawaan di `config/security.php`): `LOGIN_IP_MAX_ATTEMPTS`, `PLATFORM_LOGIN_MAX_ATTEMPTS`, `PLATFORM_LOGIN_WINDOW_SECONDS`, `PLATFORM_LOGIN_IP_MAX_ATTEMPTS`, `RESET_REQUEST_MAX_ATTEMPTS`, `RESET_REQUEST_WINDOW_SECONDS`, `REGISTRATION_MAX_ATTEMPTS`, `REGISTRATION_WINDOW_SECONDS`, `INVITATION_RESEND_MAX_ATTEMPTS`, `INVITATION_RESEND_WINDOW_SECONDS`. Percobaan login tenant dibatasi 5 per 15 menit per (email, IP) dan tidak dapat diubah lewat `.env`.

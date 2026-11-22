@@ -25,8 +25,10 @@ final class Request
     ) {
     }
 
-    public static function fromGlobals(): self
+    /** @param list<string>|null $trustedProxies IP/CIDR proxy tepercaya; null = config security.trusted_proxies */
+    public static function fromGlobals(?array $trustedProxies = null): self
     {
+        $trustedProxies ??= self::configuredProxies();
         $headers = [];
         foreach ($_SERVER as $key => $value) {
             if (str_starts_with($key, 'HTTP_') && is_string($value)) {
@@ -48,7 +50,11 @@ final class Request
             $_POST,
             $headers,
             $_FILES,
-            is_string($_SERVER['REMOTE_ADDR'] ?? null) ? $_SERVER['REMOTE_ADDR'] : '0.0.0.0',
+            self::resolveClientIp(
+                is_string($_SERVER['REMOTE_ADDR'] ?? null) ? $_SERVER['REMOTE_ADDR'] : '0.0.0.0',
+                is_string($_SERVER['HTTP_X_FORWARDED_FOR'] ?? null) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : null,
+                $trustedProxies
+            ),
             ['https' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'],
         );
     }
@@ -75,6 +81,91 @@ final class Request
             $files,
             '127.0.0.1',
         );
+    }
+
+    /** @return list<string> */
+    private static function configuredProxies(): array
+    {
+        $list = Config::get('security.trusted_proxies', []);
+        return is_array($list) ? array_values(array_filter($list, 'is_string')) : [];
+    }
+
+    /**
+     * IP klien. X-Forwarded-For hanya dibaca bila REMOTE_ADDR adalah proxy tepercaya; lalu
+     * dipilih entri paling kanan yang bukan proxy tepercaya (entri kiri bisa dipalsukan klien).
+     * Entri tak valid menghentikan penelusuran dan mengembalikan REMOTE_ADDR (gagal tertutup).
+     *
+     * @param list<string> $trusted IP atau CIDR (IPv4/IPv6)
+     */
+    public static function resolveClientIp(string $remote, ?string $forwardedFor, array $trusted): string
+    {
+        if ($trusted === [] || $forwardedFor === null || !self::ipMatches($remote, $trusted)) {
+            return $remote;
+        }
+        foreach (array_reverse(explode(',', $forwardedFor)) as $entry) {
+            $entry = trim($entry);
+            $packed = filter_var($entry, FILTER_VALIDATE_IP) !== false ? @inet_pton($entry) : false;
+            if ($packed === false) {
+                return $remote;
+            }
+            if (!self::ipMatches($entry, $trusted)) {
+                return (string) inet_ntop($packed);
+            }
+        }
+        return $remote;
+    }
+
+    /** @param list<string> $list IP atau CIDR; entri rusak diabaikan */
+    private static function ipMatches(string $ip, array $list): bool
+    {
+        $addr = self::pack($ip);
+        if ($addr === null) {
+            return false;
+        }
+        foreach ($list as $item) {
+            [$net, $bits] = array_pad(explode('/', trim($item), 2), 2, null);
+            $base = self::pack((string) $net);
+            if ($base === null || strlen($base) !== strlen($addr)) {
+                continue;
+            }
+            $max = strlen($base) * 8;
+            if ($bits === null) {
+                $len = $max;
+            } elseif (preg_match('/^\d{1,3}$/', $bits) === 1 && (int) $bits <= $max) {
+                $len = (int) $bits;
+            } else {
+                continue;
+            }
+            $bytes = intdiv($len, 8);
+            if ($bytes > 0 && substr($addr, 0, $bytes) !== substr($base, 0, $bytes)) {
+                continue;
+            }
+            $rest = $len % 8;
+            if ($rest === 0) {
+                return true;
+            }
+            $mask = (0xFF << (8 - $rest)) & 0xFF;
+            if ((ord($addr[$bytes]) & $mask) === (ord($base[$bytes]) & $mask)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Biner 4/16 byte; ::ffff:a.b.c.d dinormalkan ke IPv4. */
+    private static function pack(string $ip): ?string
+    {
+        if (filter_var($ip, FILTER_VALIDATE_IP) === false) {
+            return null;
+        }
+        $packed = @inet_pton($ip);
+        if ($packed === false) {
+            return null;
+        }
+        if (strlen($packed) === 16 && str_starts_with($packed, "\0\0\0\0\0\0\0\0\0\0\xFF\xFF")) {
+            return substr($packed, 12);
+        }
+        return $packed;
     }
 
     private static function pathOf(string $uri): string

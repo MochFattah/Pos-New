@@ -41,7 +41,7 @@ server {
 
 Catatan:
 
-- Aplikasi membaca IP klien dari `REMOTE_ADDR` saja dan tidak memercayai `X-Forwarded-For`. Di balik proxy terbalik, pembatas laju melihat IP proxy; tangani sebelum produksi bila ada proxy.
+- IP klien (dipakai pembatas laju) diambil dari `REMOTE_ADDR`. `X-Forwarded-For` diabaikan kecuali `REMOTE_ADDR` termasuk `TRUSTED_PROXIES` di `.env` (IP/CIDR dipisah koma, IPv4/IPv6, bawaan kosong). Bila ya, dipakai entri paling kanan yang bukan proxy tepercaya; entri tak valid membuat aplikasi kembali ke `REMOTE_ADDR`. **Di balik proxy/CDN/load balancer wajib mengisi `TRUSTED_PROXIES`**; bila tidak, semua pengguna berbagi satu IP dan 50 login gagal dari siapa pun mengunci login semua orang selama 15 menit. Proxy harus menambahkan (bukan menimpa tanpa memeriksa) IP asli ke `X-Forwarded-For`, mis. `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`. Jangan isi `TRUSTED_PROXIES` bila aplikasi dapat dijangkau langsung dari internet.
 - Bila TLS diakhiri di proxy, set `SESSION_SECURE=true` di `.env`.
 - PHP-FPM: PHP 8.3+, ekstensi `pdo_mysql`, `mbstring`, `fileinfo`, `openssl`. `upload_max_filesize` dan `post_max_size` minimal 2M dan 3M.
 - Izin, `.env`, database, penginstal, Super Admin, SMTP, backup, dan upgrade sama dengan `docs/deployment/cpanel.md` (bagian 3 sampai 10). Di server sendiri jalankan `php scripts/migrate.php` langsung lewat SSH.

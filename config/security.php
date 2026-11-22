@@ -44,6 +44,11 @@ return [
             return in_array($value, ['true', 'false', 'auto'], true) ? $value : $default;
         })(),
     ],
+    // Proxy terbalik tepercaya (IP/CIDR dipisah koma). Kosong = X-Forwarded-For diabaikan, IP klien = REMOTE_ADDR.
+    'trusted_proxies' => array_values(array_filter(
+        array_map('trim', explode(',', (string) Env::get('TRUSTED_PROXIES', ''))),
+        static fn (string $v): bool => $v !== ''
+    )),
     'demo' => ['default_ttl_seconds' => 86400],
     'install_token' => Env::get('INSTALL_TOKEN', ''),
 ];
