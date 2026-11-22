@@ -119,7 +119,7 @@ MySQL meng-commit DDL secara implisit, jadi kegagalan pada pernyataan ke-N menin
 | Gejala | Penyebab umum |
 |---|---|
 | Halaman putih atau 500 | Lihat `storage/logs/app.log` (memuat ID permintaan yang tampil di halaman). Pastikan PHP 8.3+ dan `.env` ada. |
-| `/install` 404 | `INSTALL_TOKEN` kosong, atau `storage/installed.lock` sudah ada. Untuk memasang ulang pada database kosong: kosongkan database, hapus lock, isi token. |
+| `/install` 404 | `INSTALL_TOKEN` kosong atau kurang dari 16 karakter, atau `storage/installed.lock` sudah ada. Untuk memasang ulang pada database kosong: kosongkan database, hapus lock, isi token. |
 | Semua halaman 403 atau 500 setelah memakai `.htaccess` root | `mod_rewrite` mati, atau `AllowOverride` tidak mengizinkan. Pindah ke pilihan A. |
 | Tidak bisa login, selalu kembali ke halaman masuk | `SESSION_SECURE=true` tetapi situs diakses lewat HTTP; pakai HTTPS. Pastikan `storage/sessions` dapat ditulis. |
 | "Sesi formulir kedaluwarsa" (419) | Cookie diblokir atau sesi habis; muat ulang halaman. |

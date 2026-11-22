@@ -22,6 +22,9 @@ final class InstallService
     public const PREFLIGHT = 'preflight';
     public const FAILED = 'failed';
 
+    /** Token lebih pendek dari ini dianggap tidak ada (penginstal mati): mudah ditebak. */
+    public const MIN_TOKEN_LENGTH = 16;
+
     private Closure $dbFactory;
 
     /**
@@ -46,15 +49,20 @@ final class InstallService
         return is_file($this->lockPath);
     }
 
-    /** Aktif hanya bila belum terpasang dan INSTALL_TOKEN tidak kosong. */
+    /** Aktif hanya bila belum terpasang dan INSTALL_TOKEN sedikitnya MIN_TOKEN_LENGTH karakter. */
     public function isActive(): bool
     {
-        return !$this->isInstalled() && $this->token !== '';
+        return !$this->isInstalled() && $this->tokenUsable();
+    }
+
+    private function tokenUsable(): bool
+    {
+        return strlen($this->token) >= self::MIN_TOKEN_LENGTH;
     }
 
     public function tokenMatches(string $given): bool
     {
-        if ($this->token === '') {
+        if (!$this->tokenUsable()) {
             return false;
         }
         return hash_equals(hash('sha256', $this->token), hash('sha256', trim($given)));

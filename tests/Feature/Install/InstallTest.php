@@ -155,6 +155,21 @@ final class InstallTest extends TestCase
         $this->assertThrows(\App\Core\Exceptions\NotFoundException::class, fn () => $stale->showForm(Request::create('GET', '/install')));
     }
 
+    public function testShortInstallTokenDisablesInstaller(): void
+    {
+        $this->boot('pendek-14-char');
+        $this->assertSame(14, strlen('pendek-14-char'));
+        $this->assertFalse($this->service->isActive());
+        $this->assertFalse($this->service->tokenMatches('pendek-14-char'));
+        $this->assertSame(404, $this->send('GET', '/install')->status());
+        $this->boot('x1234567890123456');
+        $this->assertTrue($this->service->isActive());
+        $this->boot(str_repeat('a', 15));
+        $this->assertFalse($this->service->isActive());
+        $this->boot(str_repeat('a', 16));
+        $this->assertTrue($this->service->isActive());
+    }
+
     public function testEmptyInstallTokenDisablesInstaller(): void
     {
         $this->boot('');
