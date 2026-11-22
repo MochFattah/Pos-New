@@ -28,9 +28,25 @@ final class Connection
             self::mysqlDsn($cfg),
             (string) ($cfg['user'] ?? ''),
             (string) ($cfg['password'] ?? ''),
-            [PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"]
+            self::mysqlOptions()
         );
         return new self($pdo);
+    }
+
+    /**
+     * Opsi sesi MySQL: rowCount = baris cocok (sama dengan SQLite), UTC, mode ketat
+     * (hosting bersama bisa non-strict/MariaDB), dan kolasi koneksi = kolasi tabel.
+     *
+     * @return array<int, mixed>
+     */
+    public static function mysqlOptions(): array
+    {
+        return [
+            PDO::MYSQL_ATTR_FOUND_ROWS => true,
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone='+00:00', "
+                . "sql_mode='STRICT_ALL_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION', "
+                . 'NAMES utf8mb4 COLLATE utf8mb4_unicode_ci',
+        ];
     }
 
     /** @param array<string, mixed> $cfg */
@@ -121,12 +137,20 @@ final class Connection
         } catch (Throwable $e) {
             $this->depth--;
             if ($outer) {
-                if ($this->pdo->inTransaction()) {
-                    $this->pdo->rollBack();
+                try {
+                    if ($this->pdo->inTransaction()) {
+                        $this->pdo->rollBack();
+                    }
+                } catch (Throwable) {
+                    // Transaksi sudah dibatalkan server; jangan menutupi exception asli.
                 }
             } else {
-                $this->pdo->exec('ROLLBACK TO SAVEPOINT ' . $savepoint);
-                $this->pdo->exec('RELEASE SAVEPOINT ' . $savepoint);
+                try {
+                    $this->pdo->exec('ROLLBACK TO SAVEPOINT ' . $savepoint);
+                    $this->pdo->exec('RELEASE SAVEPOINT ' . $savepoint);
+                } catch (Throwable) {
+                    // Server sudah membatalkan transaksi (deadlock/lock wait): savepoint hilang; jangan menutupi exception asli.
+                }
             }
             throw $e;
         }

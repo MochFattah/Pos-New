@@ -90,6 +90,34 @@ final class ConnectionTest extends TestCase
         $this->assertSame(0, count($this->db->query('SELECT * FROM t')));
     }
 
+    public function testMysqlOptionsSetFoundRowsStrictModeUtcAndCollation(): void
+    {
+        $o = Connection::mysqlOptions();
+        $this->assertSame(true, $o[\PDO::MYSQL_ATTR_FOUND_ROWS]);
+        $init = (string) $o[\PDO::MYSQL_ATTR_INIT_COMMAND];
+        foreach (["time_zone='+00:00'", 'STRICT_ALL_TABLES', 'NO_ZERO_DATE', 'NO_ZERO_IN_DATE', 'ERROR_FOR_DIVISION_BY_ZERO', 'NO_ENGINE_SUBSTITUTION', 'NAMES utf8mb4 COLLATE utf8mb4_unicode_ci'] as $part) {
+            $this->assertContains($part, $init);
+        }
+    }
+
+    public function testSavepointRollbackFailureDoesNotMaskOriginalException(): void
+    {
+        $original = new RuntimeException('asli');
+        $caught = null;
+        try {
+            $this->db->transaction(function () use ($original): void {
+                $this->db->transaction(function () use ($original): void {
+                    // Server membatalkan seluruh transaksi (mis. deadlock): savepoint lenyap.
+                    $this->db->execute('ROLLBACK');
+                    throw $original;
+                });
+            });
+        } catch (\Throwable $e) {
+            $caught = $e;
+        }
+        $this->assertTrue($caught === $original, 'exception asli harus dilempar ulang, dapat: ' . ($caught ? $caught->getMessage() : 'null'));
+    }
+
     public function testMysqlDsn(): void
     {
         $dsn = Connection::mysqlDsn(['host' => 'db.local', 'port' => 3307, 'name' => 'pos', 'charset' => 'utf8mb4']);
