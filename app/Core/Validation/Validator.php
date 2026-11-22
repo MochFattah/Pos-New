@@ -34,6 +34,11 @@ final class Validator
 
             $isRaw = in_array($field, self::RAW_FIELDS, true) || in_array('raw', $ruleList, true);
             $value = $isRaw ? (string) ($raw ?? '') : trim((string) ($raw ?? ''));
+            // MySQL strict + utf8mb4 menolak UTF-8 rusak (error 1366 -> 500); tolak sebelum menyentuh DB.
+            if (!mb_check_encoding($value, 'UTF-8')) {
+                $errors[$field] = self::upper($label) . ' berisi teks tidak valid.';
+                continue;
+            }
             if ($value === '') {
                 if (in_array('required', $ruleList, true)) {
                     $errors[$field] = self::upper($label) . ' wajib diisi.';

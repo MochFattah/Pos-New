@@ -29,6 +29,15 @@ final class BranchTest extends BranchHarness
         }
     }
 
+    public function testInvalidUtf8BranchInputIsRejectedBeforeDb(): void
+    {
+        $this->ownerLoggedIn();
+        $res = $this->send('POST', '/cabang', ['code' => 'CAB9', 'name' => "Cab\xFFang", 'address' => "Jl \xC3"]);
+        $this->assertSame(422, $res->status());
+        $this->assertContains('teks tidak valid', $res->body());
+        $this->assertSame(0, $this->count('SELECT COUNT(*) AS n FROM branches WHERE code = ?', ['CAB9']));
+    }
+
     public function testBranchCodeUniquePerTenantButReusableAcrossTenants(): void
     {
         $a = $this->activeOwner('a@example.com');

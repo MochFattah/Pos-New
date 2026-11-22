@@ -208,6 +208,16 @@ final class RegistrationTest extends TestCase
         $this->assertContains('Email sudah terdaftar.', $res->body());
     }
 
+    public function testInvalidUtf8InputIsValidationErrorNotServerError(): void
+    {
+        foreach (['owner_name', 'business_name', 'address', 'business_type'] as $field) {
+            $res = $this->post('/daftar', $this->input([$field => "Bud\xFFi"]));
+            $this->assertSame(422, $res->status(), $field);
+            $this->assertContains('teks tidak valid', $res->body(), $field);
+        }
+        $this->assertSame(0, $this->count('tenants'));
+    }
+
     public function testNoDemoBeforeVerification(): void
     {
         $this->registerDefault();
