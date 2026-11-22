@@ -36,6 +36,11 @@ final class Session
         $this->storage->replace($data);
     }
 
+    public function hasData(): bool
+    {
+        return $this->storage->all() !== [];
+    }
+
     public function forget(string $key): void
     {
         $data = $this->storage->all();
@@ -53,7 +58,10 @@ final class Session
     public function pullFlash(string $key): mixed
     {
         $flash = (array) $this->get(self::FLASH, []);
-        $value = $flash[$key] ?? null;
+        if (!array_key_exists($key, $flash)) {
+            return null;
+        }
+        $value = $flash[$key];
         unset($flash[$key]);
         $this->set(self::FLASH, $flash);
         return $value;

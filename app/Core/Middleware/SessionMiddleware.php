@@ -33,8 +33,13 @@ final class SessionMiddleware implements MiddlewareInterface
             $session->destroy();
             $session->start();
         }
-        $session->set('_last_activity', ($this->clock)());
 
-        return $next($request->withAttribute('session', $session));
+        $response = $next($request->withAttribute('session', $session));
+
+        // Cap waktu hanya ditulis bila sesi sudah berisi data; permintaan anonim tidak membuat sesi.
+        if ($session->hasData()) {
+            $session->set('_last_activity', ($this->clock)());
+        }
+        return $response;
     }
 }

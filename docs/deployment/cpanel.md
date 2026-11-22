@@ -98,6 +98,8 @@ Gunakan akun email cPanel pada domain yang sama dan pastikan SPF/DKIM aktif di E
 
 ## 9. Cron
 
+**Sesi.** Berkas sesi disimpan di `storage/sessions` (bukan folder sesi bawaan PHP, jadi cron pembersih bawaan distro tidak menyentuhnya). Aplikasi membersihkannya sendiri: setiap sesi baru dibuka, ada peluang 1% (`gc_probability=1`, `gc_divisor=100`) menghapus berkas yang melewati `gc_maxlifetime` (batas idle + 1 jam). Sesi hanya dibuat bila permintaan membawa cookie sesi yang valid atau mulai menyimpan data (formulir/login), sehingga bot dan halaman 404/publik tidak menghabiskan inode. Pantau jumlah berkas di `storage/sessions` pada kuota inode hosting Anda.
+
 Belum ada pekerjaan terjadwal yang diperlukan pada fondasi ini. Cron hanya relevan untuk menjalankan `php scripts/migrate.php` saat upgrade di hosting tanpa SSH (lihat bagian 10).
 
 ## 10. Backup dan upgrade
