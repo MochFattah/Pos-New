@@ -31,7 +31,7 @@ Penginstal tidak membuat `.env`. Salin `.env.example` menjadi `.env` di akar pro
 | `APP_TIMEZONE` | Bawaan `Asia/Jakarta` |
 | `SESSION_SECURE` | `true` (cookie Secure dan HSTS). Wajib `true` bila TLS diakhiri di proxy. Hosting harus memakai HTTPS. |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Dari langkah 4. Di cPanel nama database dan pengguna biasanya berawalan nama akun. |
-| `MAIL_DRIVER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_ENCRYPTION`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`, `MAIL_TIMEOUT`, `MAIL_EHLO_HOSTNAME`, `MAIL_LOG_PATH` (hanya driver log) | Lihat bagian 8. |
+| `MAIL_DRIVER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_ENCRYPTION`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`, `MAIL_TIMEOUT`, `MAIL_EHLO_HOSTNAME`, `MAIL_ALLOW_LOG`, `MAIL_LOG_PATH` (hanya driver log) | Lihat bagian 8. |
 | `INSTALL_TOKEN` | Isi string acak panjang (sekitar 32 karakter) hanya selama pemasangan; kosong = penginstal mati. |
 | `SUPPORT_EMAIL` | Opsional; ditampilkan di halaman bantuan. |
 
@@ -82,7 +82,7 @@ Keterbatasan: bila hosting tidak punya SSH, gunakan Terminal di cPanel bila ters
 
 ## 8. SMTP dan uji email
 
-Bawaan `MAIL_DRIVER=log` hanya menulis email ke `storage/logs/mail.log`; di production ini berarti tidak ada email yang terkirim (verifikasi dan reset password tidak sampai ke pengguna). Untuk mengirim sungguhan:
+Driver `log` menulis email ke `storage/logs/mail.log`: tidak ada email terkirim dan **tautan token (reset password, verifikasi, undangan) tersimpan apa adanya di berkas itu**; siapa pun yang dapat membaca `storage/` (backup, docroot salah konfigurasi, akun hosting lain) dapat mengambil alih akun. Karena itu di `APP_ENV=production` aplikasi menolak driver `log` (halaman daftar/lupa password akan error 500 dengan pesan jelas di `app.log`) kecuali Anda sengaja mengatur `MAIL_ALLOW_LOG=true`. Untuk mengirim sungguhan:
 
 ```
 MAIL_DRIVER=smtp
@@ -124,5 +124,5 @@ MySQL meng-commit DDL secara implisit, jadi kegagalan pada pernyataan ke-N menin
 | Tidak bisa login, selalu kembali ke halaman masuk | `SESSION_SECURE=true` tetapi situs diakses lewat HTTP; pakai HTTPS. Pastikan `storage/sessions` dapat ditulis. |
 | "Sesi formulir kedaluwarsa" (419) | Cookie diblokir atau sesi habis; muat ulang halaman. |
 | Unggah logo gagal | Batas logo 1 MB. Pastikan `upload_max_filesize` dan `post_max_size` di php.ini minimal 2M dan 3M (bawaan PHP 2M dan 8M sudah cukup); bila lebih kecil, naikkan lewat MultiPHP INI Editor. Pelanggaran `post_max_size` saat ini menampilkan 419, bukan pesan khusus. |
-| Email tidak terkirim | Masih `MAIL_DRIVER=log`, atau kredensial/port/enkripsi salah. Lihat `app.log`. |
+| Email tidak terkirim | `MAIL_DRIVER=log` di production (ditolak kecuali `MAIL_ALLOW_LOG=true`), atau kredensial/port/enkripsi salah. Lihat `app.log`. |
 | Pra-pemeriksaan ekstensi gagal | Aktifkan di Select PHP Version, lalu muat ulang `/install`. |

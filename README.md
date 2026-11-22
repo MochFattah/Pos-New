@@ -21,7 +21,7 @@ php -S localhost:8000 -t public
 php scripts/create-platform-admin.php "Nama Admin" email@domain.com
 ```
 
-`MAIL_DRIVER=log` menulis email ke `storage/logs/mail.log`, jadi tautan verifikasi dapat diambil dari sana.
+`MAIL_DRIVER=log` (hanya untuk pengembangan; di `APP_ENV=production` ditolak kecuali `MAIL_ALLOW_LOG=true`) menulis email ke `storage/logs/mail.log`, jadi tautan verifikasi dapat diambil dari sana.
 
 ## Pengujian
 

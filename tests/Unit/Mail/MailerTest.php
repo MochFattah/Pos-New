@@ -270,23 +270,32 @@ final class MailerTest extends TestCase
 
     public function testFactoryDefaultsToLogAndBuildsSmtp(): void
     {
-        $this->assertTrue(MailerFactory::fromArray([], '/x') instanceof LogMailer);
-        $this->assertTrue(MailerFactory::fromArray(['driver' => 'log'], '/x') instanceof LogMailer);
+        $this->assertTrue(MailerFactory::fromArray(['env' => 'local'], '/x') instanceof LogMailer);
+        $this->assertTrue(MailerFactory::fromArray(['driver' => 'log', 'env' => 'local'], '/x') instanceof LogMailer);
         $smtp = MailerFactory::fromArray(['driver' => 'smtp', 'host' => 'h', 'port' => 25, 'from_address' => 'a@b.com', 'encryption' => 'none'], '/x');
         $this->assertTrue($smtp instanceof SmtpMailer);
         $this->assertThrows(MailException::class, fn () => MailerFactory::fromArray(['driver' => 'pigeon'], '/x'));
     }
 
+    public function testFactoryRefusesLogDriverInProductionUnlessAllowed(): void
+    {
+        foreach ([['driver' => 'log'], ['driver' => 'log', 'env' => 'production'], ['driver' => 'log', 'env' => 'production', 'allow_log' => false], ['env' => 'production']] as $cfg) {
+            $this->assertThrows(MailException::class, fn () => MailerFactory::fromArray($cfg, '/x'));
+        }
+        $this->assertTrue(MailerFactory::fromArray(['driver' => 'log', 'env' => 'production', 'allow_log' => true], '/x') instanceof LogMailer);
+        $this->assertTrue(MailerFactory::fromArray(['driver' => 'log', 'env' => 'local'], '/x') instanceof LogMailer);
+    }
+
     public function testFactoryLogMailerWritesToConfiguredPath(): void
     {
         $abs = $this->dir . '/abs/custom.log';
-        MailerFactory::fromArray(['driver' => 'log', 'log_path' => $abs], $this->dir . '/base')->send('a@b.com', 'S', 'isi');
+        MailerFactory::fromArray(['driver' => 'log', 'env' => 'local', 'log_path' => $abs], $this->dir . '/base')->send('a@b.com', 'S', 'isi');
         $this->assertContains('To: a@b.com', (string) file_get_contents($abs));
 
-        MailerFactory::fromArray(['driver' => 'log', 'log_path' => 'var/rel.log'], $this->dir . '/base')->send('c@b.com', 'S', 'isi');
+        MailerFactory::fromArray(['driver' => 'log', 'env' => 'local', 'log_path' => 'var/rel.log'], $this->dir . '/base')->send('c@b.com', 'S', 'isi');
         $this->assertContains('To: c@b.com', (string) file_get_contents($this->dir . '/base/var/rel.log'));
 
-        MailerFactory::fromArray(['driver' => 'log'], $this->dir . '/base')->send('d@b.com', 'S', 'isi');
+        MailerFactory::fromArray(['driver' => 'log', 'env' => 'local'], $this->dir . '/base')->send('d@b.com', 'S', 'isi');
         $this->assertContains('To: d@b.com', (string) file_get_contents($this->dir . '/base/storage/logs/mail.log'));
     }
 

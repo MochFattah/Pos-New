@@ -23,6 +23,10 @@ final class MailerFactory
     {
         $driver = (string) ($cfg['driver'] ?? 'log');
         if ($driver === 'log') {
+            // Gagal tertutup: driver log menulis tautan token (reset/verifikasi/undangan) apa adanya ke berkas.
+            if (strtolower((string) ($cfg['env'] ?? 'production')) === 'production' && ($cfg['allow_log'] ?? false) !== true) {
+                throw new MailException('MAIL_DRIVER=log ditolak di production karena menulis tautan token ke berkas. Atur MAIL_DRIVER=smtp, atau MAIL_ALLOW_LOG=true bila memang disengaja.');
+            }
             $path = trim((string) ($cfg['log_path'] ?? ''));
             if ($path === '') {
                 $path = 'storage/logs/mail.log';

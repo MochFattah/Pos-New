@@ -6,6 +6,9 @@ use App\Core\Env;
 
 return [
     'driver' => Env::get('MAIL_DRIVER', 'log'),
+    // Dipakai MailerFactory: driver log ditolak di production kecuali MAIL_ALLOW_LOG=true.
+    'env' => Env::get('APP_ENV', 'production'),
+    'allow_log' => strtolower(trim((string) Env::get('MAIL_ALLOW_LOG', 'false'))) === 'true',
     'host' => Env::get('MAIL_HOST', ''),
     'port' => (int) Env::get('MAIL_PORT', '587'),
     'username' => Env::get('MAIL_USERNAME', ''),
