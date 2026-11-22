@@ -85,6 +85,42 @@ final class MigratorTest extends TestCase
         $this->assertSame(0, count($this->db->query("SELECT name FROM sqlite_master WHERE name = 'c'")));
     }
 
+    public function testRetryAfterPartialNonTransactionalFailureSucceeds(): void
+    {
+        // Meniru MySQL (DDL auto-commit): pernyataan 1 sudah terlanjur dibuat, pernyataan 2 gagal.
+        $sql = "CREATE TABLE IF NOT EXISTS p1 (id INTEGER);\nCREATE TABLE IF NOT EXISTS p2 (id INTEGER, x INTEGER);";
+        $this->db->execute('CREATE TABLE p1 (id INTEGER)');
+        $this->write('001_p.sql', $sql);
+        $this->assertSame(['001_p.sql'], (new Migrator($this->db, $this->dir))->migrate());
+        $this->assertSame(2, count($this->db->query("SELECT name FROM sqlite_master WHERE name IN ('p1','p2')")));
+    }
+
+    public function testFailureThenFixedRetrySucceeds(): void
+    {
+        $this->write('001_a.sql', "CREATE TABLE IF NOT EXISTS a (id INTEGER);\nINSERT INTO nope VALUES (1);");
+        $m = new Migrator($this->db, $this->dir);
+        $failed = false;
+        try {
+            $m->migrate();
+        } catch (RuntimeException) {
+            $failed = true;
+        }
+        $this->assertTrue($failed);
+        $this->write('001_a.sql', 'CREATE TABLE IF NOT EXISTS a (id INTEGER);');
+        $this->assertSame(['001_a.sql'], $m->migrate());
+    }
+
+    public function testFoundationMysqlMigrationIsIdempotentDdl(): void
+    {
+        $sql = (string) file_get_contents(dirname(__DIR__, 3) . '/database/migrations/0001_foundation_schema.sql');
+        foreach (Migrator::split($sql, true) as $statement) {
+            $this->assertTrue(
+                preg_match('/^CREATE TABLE IF NOT EXISTS /', $statement) === 1,
+                'tidak idempoten: ' . substr($statement, 0, 50)
+            );
+        }
+    }
+
     public function testUnreadableFileIsNotRecorded(): void
     {
         $this->write('001_a.sql', 'CREATE TABLE a (id INTEGER);');

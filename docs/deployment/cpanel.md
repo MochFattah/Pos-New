@@ -110,6 +110,10 @@ Belum ada pekerjaan terjadwal yang diperlukan pada fondasi ini. Cron hanya relev
 4. Jalankan migrasi baru: `php scripts/migrate.php` (aman diulang; hanya menjalankan berkas yang belum tercatat di `schema_migrations`). Penginstal sudah terkunci dan tidak dipakai untuk upgrade. Tanpa SSH: buat cron satu kali (`php /home/AKUN/pos-retail/scripts/migrate.php`) pada menit berikutnya, lihat hasilnya lewat email cron, lalu hapus cron itu.
 5. Buka aplikasi, uji login dan satu alur utama. Bila gagal, pulihkan database dan berkas dari backup.
 
+### Bila migrasi gagal di tengah jalan
+
+MySQL meng-commit DDL secara implisit, jadi kegagalan pada pernyataan ke-N meninggalkan tabel 1..N-1. Berkas migrasi memakai `CREATE TABLE IF NOT EXISTS`, sehingga **mengulang aman**: perbaiki penyebabnya (hak akses, kuota, engine), lalu jalankan ulang `php scripts/migrate.php` atau kirim ulang formulir penginstal. Tabel yang sudah ada dilewati dan nama berkas baru dicatat setelah semua pernyataan sukses. Pembersihan manual hanya perlu bila Anda ingin mulai dari nol: di phpMyAdmin pilih semua tabel pada database, pilih "Drop" (matikan "Enable foreign key checks" lebih dulu), lalu ulangi migrasi.
+
 ## 11. Pemecahan masalah
 
 | Gejala | Penyebab umum |

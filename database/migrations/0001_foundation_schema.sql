@@ -1,7 +1,7 @@
 -- Skema fondasi POS Retail (MySQL 8, InnoDB, utf8mb4). Waktu disimpan UTC.
 -- Catatan: berkas ini belum pernah dijalankan pada server MySQL nyata (lihat docs/database/README.md).
 
-CREATE TABLE platform_users (
+CREATE TABLE IF NOT EXISTS platform_users (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   name VARCHAR(150) NOT NULL,
   email VARCHAR(190) NOT NULL,
@@ -14,7 +14,7 @@ CREATE TABLE platform_users (
   UNIQUE KEY uq_platform_users_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE tenants (
+CREATE TABLE IF NOT EXISTS tenants (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   uuid CHAR(36) NOT NULL,
   name VARCHAR(150) NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE tenants (
   KEY idx_tenants_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE tenant_profiles (
+CREATE TABLE IF NOT EXISTS tenant_profiles (
   tenant_id BIGINT UNSIGNED NOT NULL,
   business_type VARCHAR(100) NULL,
   address VARCHAR(500) NULL,
@@ -36,7 +36,7 @@ CREATE TABLE tenant_profiles (
   CONSTRAINT fk_tenant_profiles_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE tenant_settings (
+CREATE TABLE IF NOT EXISTS tenant_settings (
   tenant_id BIGINT UNSIGNED NOT NULL,
   timezone VARCHAR(64) NOT NULL DEFAULT 'Asia/Jakarta',
   currency_code CHAR(3) NOT NULL DEFAULT 'IDR',
@@ -45,7 +45,7 @@ CREATE TABLE tenant_settings (
   CONSTRAINT fk_tenant_settings_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE branches (
+CREATE TABLE IF NOT EXISTS branches (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   tenant_id BIGINT UNSIGNED NOT NULL,
   code VARCHAR(30) NOT NULL,
@@ -62,7 +62,7 @@ CREATE TABLE branches (
   CONSTRAINT fk_branches_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   tenant_id BIGINT UNSIGNED NOT NULL,
   name VARCHAR(150) NOT NULL,
@@ -81,7 +81,7 @@ CREATE TABLE users (
   CONSTRAINT fk_users_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE roles (
+CREATE TABLE IF NOT EXISTS roles (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   tenant_id BIGINT UNSIGNED NOT NULL,
   slug VARCHAR(60) NOT NULL,
@@ -93,7 +93,7 @@ CREATE TABLE roles (
   CONSTRAINT fk_roles_tenant FOREIGN KEY (tenant_id) REFERENCES tenants (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE permissions (
+CREATE TABLE IF NOT EXISTS permissions (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   code VARCHAR(80) NOT NULL,
   module VARCHAR(60) NOT NULL,
@@ -102,7 +102,7 @@ CREATE TABLE permissions (
   UNIQUE KEY uq_permissions_code (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE role_permissions (
+CREATE TABLE IF NOT EXISTS role_permissions (
   role_id BIGINT UNSIGNED NOT NULL,
   permission_id BIGINT UNSIGNED NOT NULL,
   tenant_id BIGINT UNSIGNED NOT NULL,
@@ -113,7 +113,7 @@ CREATE TABLE role_permissions (
   CONSTRAINT fk_role_permissions_permission FOREIGN KEY (permission_id) REFERENCES permissions (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE user_roles (
+CREATE TABLE IF NOT EXISTS user_roles (
   user_id BIGINT UNSIGNED NOT NULL,
   role_id BIGINT UNSIGNED NOT NULL,
   tenant_id BIGINT UNSIGNED NOT NULL,
@@ -124,7 +124,7 @@ CREATE TABLE user_roles (
   CONSTRAINT fk_user_roles_role FOREIGN KEY (tenant_id, role_id) REFERENCES roles (tenant_id, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE user_branch_access (
+CREATE TABLE IF NOT EXISTS user_branch_access (
   user_id BIGINT UNSIGNED NOT NULL,
   branch_id BIGINT UNSIGNED NOT NULL,
   tenant_id BIGINT UNSIGNED NOT NULL,
@@ -135,14 +135,14 @@ CREATE TABLE user_branch_access (
   CONSTRAINT fk_user_branch_access_branch FOREIGN KEY (tenant_id, branch_id) REFERENCES branches (tenant_id, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE demo_settings (
+CREATE TABLE IF NOT EXISTS demo_settings (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   is_enabled TINYINT(1) NOT NULL DEFAULT 1,
   duration_hours INT UNSIGNED NOT NULL DEFAULT 24,
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE tenant_demos (
+CREATE TABLE IF NOT EXISTS tenant_demos (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   tenant_id BIGINT UNSIGNED NOT NULL,
   starts_at DATETIME NOT NULL,
@@ -158,7 +158,7 @@ CREATE TABLE tenant_demos (
   CONSTRAINT fk_tenant_demos_granted_by FOREIGN KEY (granted_by_platform_user_id) REFERENCES platform_users (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE email_verifications (
+CREATE TABLE IF NOT EXISTS email_verifications (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id BIGINT UNSIGNED NOT NULL,
   token_hash CHAR(64) NOT NULL,
@@ -171,7 +171,7 @@ CREATE TABLE email_verifications (
   CONSTRAINT fk_email_verifications_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE password_resets (
+CREATE TABLE IF NOT EXISTS password_resets (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id BIGINT UNSIGNED NOT NULL,
   token_hash CHAR(64) NOT NULL,
@@ -185,7 +185,7 @@ CREATE TABLE password_resets (
   CONSTRAINT fk_password_resets_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE login_attempts (
+CREATE TABLE IF NOT EXISTS login_attempts (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   identifier_hash CHAR(64) NOT NULL,
   ip VARCHAR(45) NOT NULL,
@@ -195,7 +195,7 @@ CREATE TABLE login_attempts (
   KEY idx_login_attempts_lookup (identifier_hash, ip, attempted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS audit_logs (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   tenant_id BIGINT UNSIGNED NULL,
   actor_type ENUM('tenant_user','platform_user','system') NOT NULL,

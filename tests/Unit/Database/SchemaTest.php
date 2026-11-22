@@ -154,7 +154,7 @@ final class SchemaTest extends TestCase
         $this->assertSame(17, count($statements));
         foreach ($statements as $s) {
             $this->assertTrue($s !== '');
-            $this->assertTrue(preg_match('/^CREATE TABLE `?\w+`?\s*\(/', $s) === 1, 'bukan CREATE TABLE: ' . substr($s, 0, 40));
+            $this->assertTrue(preg_match('/^CREATE TABLE IF NOT EXISTS `?\w+`?\s*\(/', $s) === 1, 'bukan CREATE TABLE: ' . substr($s, 0, 40));
             $this->assertContains('ENGINE=InnoDB', $s);
             $this->assertContains('utf8mb4_unicode_ci', $s);
         }
