@@ -9,7 +9,7 @@ Sumber kebenaran: `PRD.md` (kebutuhan), `DESAIN.md` (visual), `.cursorrules` (te
 - PHP 8.3+ dengan ekstensi `pdo_mysql`, `mbstring`, `fileinfo`, `openssl`
 - MySQL 8.0+
 - Apache (`mod_rewrite`) atau Nginx; lihat `docs/deployment/`
-- Node.js 22 hanya untuk build CSS, tes JS, dan tangkapan layar (tidak diperlukan di server)
+- Node.js 22 hanya untuk build CSS, tes JS, dan tangkapan layar (tidak diperlukan di server). `npm install` memasang `playwright` (devDependency); jalankan `npx playwright install chromium` sekali. Tanpa itu tes JS dilewati; setel `POS_REQUIRE_JS=1` (mis. di CI) agar dilewati dianggap GAGAL
 - Tanpa Composer dan tanpa dependensi runtime (`docs/decisions/0001-zero-dependency-core.md`)
 
 ## Pengembangan lokal
