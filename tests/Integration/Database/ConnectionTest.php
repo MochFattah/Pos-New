@@ -95,7 +95,7 @@ final class ConnectionTest extends TestCase
         $o = Connection::mysqlOptions();
         $this->assertSame(true, $o[\PDO::MYSQL_ATTR_FOUND_ROWS]);
         $init = (string) $o[\PDO::MYSQL_ATTR_INIT_COMMAND];
-        foreach (["time_zone='+00:00'", 'STRICT_ALL_TABLES', 'NO_ZERO_DATE', 'NO_ZERO_IN_DATE', 'ERROR_FOR_DIVISION_BY_ZERO', 'NO_ENGINE_SUBSTITUTION', 'NAMES utf8mb4 COLLATE utf8mb4_unicode_ci'] as $part) {
+        foreach (["time_zone='+00:00'", 'ONLY_FULL_GROUP_BY', 'STRICT_ALL_TABLES', 'NO_ZERO_DATE', 'NO_ZERO_IN_DATE', 'ERROR_FOR_DIVISION_BY_ZERO', 'NO_ENGINE_SUBSTITUTION', 'NAMES utf8mb4 COLLATE utf8mb4_unicode_ci'] as $part) {
             $this->assertContains($part, $init);
         }
     }
