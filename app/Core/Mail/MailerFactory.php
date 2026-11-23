@@ -14,6 +14,12 @@ final class MailerFactory
         return self::fromArray(is_array($cfg) ? $cfg : [], dirname(__DIR__, 3));
     }
 
+    /** Versi malas: penolakan konfigurasi (MailException) baru muncul saat send(), bukan saat controller dibangun. */
+    public static function lazyFromConfig(): MailerInterface
+    {
+        return new LazyMailer(static fn (): MailerInterface => self::fromConfig());
+    }
+
     /**
      * @param array<string, mixed> $cfg
      * @param string $basePath dasar untuk path log relatif

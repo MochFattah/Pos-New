@@ -124,7 +124,7 @@ $buildRegisterController = static function () use ($buildAuditLogger, $sharedDb,
     $sender = new VerificationEmailSender(
         $verifications,
         new TokenService(),
-        MailerFactory::fromConfig(),
+        MailerFactory::lazyFromConfig(),
         (string) Config::get('app.url', ''),
         (int) Config::get('security.verification_token.ttl_seconds', 86400),
         null,
@@ -188,7 +188,7 @@ $buildPasswordResetController = static function () use ($buildAuditLogger, $shar
             new UserRepository($db),
             new TokenService(),
             new PasswordHasher(),
-            MailerFactory::fromConfig(),
+            MailerFactory::lazyFromConfig(),
             $buildAuditLogger($db),
             (string) Config::get('app.url', ''),
             $ttl,
@@ -223,7 +223,7 @@ $buildUserController = static function () use ($buildAuditLogger, $sharedDb, $sh
     $sender = new InvitationEmailSender(
         new EmailVerificationRepository($db),
         new TokenService(),
-        MailerFactory::fromConfig(),
+        MailerFactory::lazyFromConfig(),
         (string) Config::get('app.url', ''),
         (int) Config::get('security.invitation_token.ttl_seconds', 86400),
         null,
@@ -266,7 +266,7 @@ $buildInvitationController = static function () use ($buildAuditLogger, $sharedD
     $users = new UserRepository($db);
     $verifications = new EmailVerificationRepository($db);
     // Pengirim tak dipakai jalur ini (penerimaan undangan); VerifyEmailService memintanya untuk kirim ulang Owner.
-    $sender = new VerificationEmailSender($verifications, new TokenService(), MailerFactory::fromConfig(), (string) Config::get('app.url', ''), 86400);
+    $sender = new VerificationEmailSender($verifications, new TokenService(), MailerFactory::lazyFromConfig(), (string) Config::get('app.url', ''), 86400);
     return new InvitationController(new VerifyEmailService($db, $verifications, $users, new TenantRepository($db), new DemoService($db), $sender, $buildAuditLogger($db)));
 };
 

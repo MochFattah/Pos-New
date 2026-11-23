@@ -286,6 +286,19 @@ final class MailerTest extends TestCase
         $this->assertTrue(MailerFactory::fromArray(['driver' => 'log', 'env' => 'local'], '/x') instanceof LogMailer);
     }
 
+    public function testLazyMailerDefersProductionRefusalToSend(): void
+    {
+        $lazy = new \App\Core\Mail\LazyMailer(static fn () => MailerFactory::fromArray(['driver' => 'log', 'env' => 'production'], '/x'));
+        $this->assertTrue($lazy instanceof \App\Core\Mail\MailerInterface, 'dibangun tanpa galat');
+        $this->assertThrows(MailException::class, fn () => $lazy->send('a@b.com', 'S', 'isi'));
+        $this->assertThrows(MailException::class, fn () => $lazy->send('a@b.com', 'S', 'isi'));
+    }
+
+    public function testLazyFromConfigDoesNotThrowOnConstruction(): void
+    {
+        $this->assertTrue(MailerFactory::lazyFromConfig() instanceof \App\Core\Mail\LazyMailer);
+    }
+
     public function testFactoryLogMailerWritesToConfiguredPath(): void
     {
         $abs = $this->dir . '/abs/custom.log';
