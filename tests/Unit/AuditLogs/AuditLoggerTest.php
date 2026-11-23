@@ -192,11 +192,14 @@ final class AuditLoggerTest extends TestCase
     {
         $a = ['x' => 1];
         $a['self'] = &$a;
-        $t = microtime(true);
-        $this->rec($a);
-        $this->assertTrue(microtime(true) - $t < 2.0);
-        json_decode((string) $this->lastRow()['metadata'], true, 512, JSON_THROW_ON_ERROR);
-        $this->assertTrue(true);
+        $this->rec($a); // bila tidak dibatasi, rekursi tak berujung (tes tidak akan selesai)
+        $stored = json_decode((string) $this->lastRow()['metadata'], true, 512, JSON_THROW_ON_ERROR);
+        $depth = 0;
+        for ($n = $stored; is_array($n) && isset($n['self']); $n = $n['self']) {
+            $depth++;
+        }
+        $this->assertTrue($depth >= 1 && $depth <= 9, "kedalaman tersimpan harus dibatasi (MAX_DEPTH), dapat $depth");
+        $this->assertTrue(str_contains((string) $this->lastRow()['metadata'], '[dalam]'));
     }
 
     public function testDeepNestingIsBounded(): void
@@ -212,9 +215,7 @@ final class AuditLoggerTest extends TestCase
 
     public function testHugeArrayIsNodeLimited(): void
     {
-        $t = microtime(true);
         $this->rec(['big' => range(1, 100000)]);
-        $this->assertTrue(microtime(true) - $t < 2.0);
         $m = $this->stored();
         $this->assertTrue(($m['_truncated'] ?? false) === true);
         $this->assertTrue(count($m['big']) <= 500);

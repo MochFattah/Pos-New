@@ -67,25 +67,41 @@ final class Runner
     {
         $case = new $class();
         set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
+            if ((error_reporting() & $severity) === 0) {
+                return false; // operator @ tetap menekan peringatan yang disengaja
+            }
             throw new ErrorException($message, 0, $severity, $file, $line);
         });
+        $status = 'PASS';
+        $detail = '';
         try {
             $case->runSetUp();
             $case->$method();
-            $result['passed']++;
-            $result['lines'][] = "PASS  $name";
         } catch (SkippedException $e) {
-            $result['skipped']++;
-            $result['lines'][] = "SKIP  $name\n      " . $e->getMessage();
+            $status = 'SKIP';
+            $detail = $e->getMessage();
         } catch (Throwable $e) {
-            $result['failed']++;
-            $result['lines'][] = "FAIL  $name\n      " . $e::class . ': ' . $e->getMessage();
+            $status = 'FAIL';
+            $detail = $e::class . ': ' . $e->getMessage();
         } finally {
             try {
                 $case->runTearDown();
-            } catch (Throwable) {
+            } catch (Throwable $e) {
+                // Galat tearDown tidak boleh tertelan: tes yang lulus/dilewati menjadi gagal.
+                $status = 'FAIL';
+                $detail = ($detail !== '' ? $detail . "\n      " : '') . 'tearDown: ' . $e::class . ': ' . $e->getMessage();
             }
             restore_error_handler();
+        }
+        if ($status === 'PASS') {
+            $result['passed']++;
+            $result['lines'][] = "PASS  $name";
+        } elseif ($status === 'SKIP') {
+            $result['skipped']++;
+            $result['lines'][] = "SKIP  $name\n      $detail";
+        } else {
+            $result['failed']++;
+            $result['lines'][] = "FAIL  $name\n      $detail";
         }
     }
 

@@ -343,7 +343,16 @@ final class ViewTest extends PageFixtures
     {
         $router = new Router(static fn (string $c): object => new \stdClass());
         $router->get('/boom', static fn (): never => throw new \RuntimeException('rahasia-internal'));
-        $app = new Application($router, sys_get_temp_dir() . '/view-' . bin2hex(random_bytes(4)) . '.log');
+        $log = sys_get_temp_dir() . '/view-' . bin2hex(random_bytes(4)) . '.log';
+        try {
+            $this->assertErrorPages(new Application($router, $log));
+        } finally {
+            @unlink($log);
+        }
+    }
+
+    private function assertErrorPages(Application $app): void
+    {
         $res = $app->handle(Request::create('GET', '/boom'));
         $this->assertSame(500, $res->status());
         $this->assertContains('skip-link', $res->body());

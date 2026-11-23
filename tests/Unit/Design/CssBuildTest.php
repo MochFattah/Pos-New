@@ -48,9 +48,7 @@ final class CssBuildTest extends TestCase
     {
         $node = $this->node();
         if ($node === '') {
-            echo "  (dilewati: node tidak tersedia, kesegaran CSS tidak diperiksa)\n";
-            $this->assertTrue(true);
-            return;
+            $this->skip('node tidak tersedia, kesegaran CSS tidak diperiksa');
         }
         $tmp = tempnam(sys_get_temp_dir(), 'css');
         exec(escapeshellarg($node) . ' ' . escapeshellarg($this->root . '/scripts/build-css.mjs') . ' --out=' . escapeshellarg($tmp) . ' 2>&1', $out, $code);

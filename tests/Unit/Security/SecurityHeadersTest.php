@@ -14,13 +14,25 @@ use Tests\Support\TestCase;
 
 final class SecurityHeadersTest extends TestCase
 {
+    /** @var list<string> */
+    private array $logs = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->logs as $f) {
+            @unlink($f);
+        }
+        $this->logs = [];
+    }
+
     private function app(bool $force = false): Application
     {
         $router = new Router();
         $router->get('/boom', function (): Response {
             throw new \RuntimeException('x');
         });
-        return new Application($router, sys_get_temp_dir() . '/pos-test-' . bin2hex(random_bytes(4)) . '.log', false, $force);
+        $this->logs[] = $log = sys_get_temp_dir() . '/pos-test-' . bin2hex(random_bytes(4)) . '.log';
+        return new Application($router, $log, false, $force);
     }
 
     private function assertHeaders(Response $r): void
