@@ -89,7 +89,8 @@ final class AuthService
             // Biaya hash naik sejak hash ini dibuat: simpan ulang dari password yang baru terbukti benar.
             // Sidik jari sesi di bawah memakai hash baru, sehingga sesi yang sedang masuk ini tidak tercabut.
             $newHash = $this->hasher->hash($password);
-            if ($this->users->updatePassword($authUser->tenantId, $authUser->id, $newHash, gmdate('Y-m-d H:i:s', ($this->clock)()))) {
+            // Bersyarat pada hash lama: reset password yang menyela tidak boleh tertimpa (gagal = hash lama dipertahankan).
+            if ($this->users->rehashPassword($authUser->tenantId, $authUser->id, $storedHash, $newHash, gmdate('Y-m-d H:i:s', ($this->clock)()))) {
                 $storedHash = $newHash;
             }
         }

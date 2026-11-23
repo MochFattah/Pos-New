@@ -95,7 +95,7 @@ class UserRepository
         }
         $this->db->execute('DELETE FROM user_branch_access WHERE tenant_id = ? AND user_id = ?', [$tenantId, $id]);
         $this->db->execute('DELETE FROM user_roles WHERE tenant_id = ? AND user_id = ?', [$tenantId, $id]);
-        $this->db->execute('DELETE FROM email_verifications WHERE user_id = ?', [$id]);
+        $this->db->execute('DELETE FROM email_verifications WHERE user_id = ? ', [$id]);
         $this->db->execute('DELETE FROM password_resets WHERE user_id = ?', [$id]);
         $deleted = $this->db->execute(
             "DELETE FROM users WHERE id = ? AND tenant_id = ? AND status = 'pending_verification' AND is_owner = 0 AND created_at < ?
@@ -125,6 +125,18 @@ class UserRepository
         return $this->db->execute(
             "UPDATE users SET password_hash = ?, updated_at = ? WHERE tenant_id = ? AND id = ? AND status = 'active'",
             [$passwordHash, $now, $tenantId, $userId]
+        ) === 1;
+    }
+
+    /**
+     * Menyimpan ulang hash (biaya baru) hanya bila hash di DB masih sama dengan yang diverifikasi saat login,
+     * sehingga reset password yang berjalan bersamaan tidak tertimpa. False bila hash sudah berubah.
+     */
+    public function rehashPassword(int $tenantId, int $userId, string $oldHash, string $newHash, string $now): bool
+    {
+        return $this->db->execute(
+            "UPDATE users SET password_hash = ?, updated_at = ? WHERE tenant_id = ? AND id = ? AND status = 'active' AND password_hash = ?",
+            [$newHash, $now, $tenantId, $userId, $oldHash]
         ) === 1;
     }
 

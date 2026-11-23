@@ -335,6 +335,30 @@ final class LoginTest extends AuthHarness
         $this->assertTrue($this->auth->userFromSession($this->session) !== null, 'sidik jari sesi mengikuti hash baru');
     }
 
+    public function testRehashDoesNotOverwriteConcurrentPasswordReset(): void
+    {
+        $r = $this->activeOwner();
+        $old = password_hash(self::PASSWORD, PASSWORD_BCRYPT, ['cost' => 4]);
+        $this->db->execute('UPDATE users SET password_hash = ? WHERE id = ?', [$old, $r['userId']]);
+        $reset = password_hash('sandi-hasil-reset-99', PASSWORD_BCRYPT);
+        $db = $this->db;
+        $hasher = new class ($db, $reset, $r['userId']) extends PasswordHasher {
+            public function __construct(private $db, private string $reset, private int $uid)
+            {
+            }
+            public function hash(string $password): string
+            {
+                // Reset password selesai tepat setelah verifikasi dan sebelum rehash ditulis.
+                $this->db->execute('UPDATE users SET password_hash = ? WHERE id = ?', [$this->reset, $this->uid]);
+                return parent::hash($password);
+            }
+        };
+        $auth = new AuthService($this->db, $this->users, new \App\Core\Security\RateLimiter($this->db, 5, 900), new \App\Core\Security\RateLimiter($this->db, 50, 900), $hasher, $this->makeAudit());
+        $result = $auth->attempt('budi@example.com', self::PASSWORD, '8.8.8.8', $this->session);
+        $this->assertTrue($result->isOk());
+        $this->assertSame($reset, (string) $this->users->findById($r['tenantId'], $r['userId'])['password_hash'], 'hash hasil reset tidak tertimpa');
+    }
+
     public function testLoginKeepsCurrentHashAndDoesNotRehashOnFailure(): void
     {
         $r = $this->activeOwner();
