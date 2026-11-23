@@ -17,6 +17,8 @@ use Closure;
 
 final class RegisterTenantService
 {
+    private const STALE_SECONDS = 86400;
+
     private Closure $clock;
 
     /** @param (callable(): int)|null $clock */
@@ -54,8 +56,14 @@ final class RegisterTenantService
 
         /** @var array{tenantId: int, userId: int} */
         return $this->db->transaction(function () use ($input, $email, $phone, $address, $type, $now): array {
+            $reclaimed = null;
             if ($this->users->findByEmail($email) !== null) {
-                throw new DuplicateEmailException();
+                // Hanya undangan non-Owner yang basi (tanpa token berlaku, > 24 jam) yang bisa dibebaskan;
+                // pengguna aktif, Owner, dan undangan segar tetap memberi 'Email sudah terdaftar' yang netral.
+                $reclaimed = $this->users->reclaimStalePending($email, $now, gmdate('Y-m-d H:i:s', ($this->clock)() - self::STALE_SECONDS));
+                if ($reclaimed === null) {
+                    throw new DuplicateEmailException();
+                }
             }
             $tenantId = $this->tenants->create($input['business_name'], 'pending_verification', $now);
             $this->tenants->createProfile($tenantId, $type, $address, $phone);
@@ -82,6 +90,9 @@ final class RegisterTenantService
                 $tenantId,
                 ['business_name' => $input['business_name']]
             );
+            if ($reclaimed !== null) {
+                $this->audit->record('user.stale_invite_reclaimed', $tenantId, AuditLogger::ACTOR_TENANT_USER, $userId, 'user', $reclaimed['id'], ['previous_tenant_id' => $reclaimed['tenant_id']]);
+            }
             $this->sender->send($userId, $email, $input['owner_name']);
             return ['tenantId' => $tenantId, 'userId' => $userId];
         });

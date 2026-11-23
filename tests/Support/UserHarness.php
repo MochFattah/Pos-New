@@ -24,10 +24,26 @@ abstract class UserHarness extends BranchHarness
     protected RoleService $roleService;
     protected RoleRepository $roleRepo;
     protected int $resendMax = 3;
+    protected int $inviteMax = 20;
+    protected int $pendingMax = 50;
 
     protected function extraServices(): array
     {
         $services = parent::extraServices();
+        $this->buildUserService();
+        $denied = new AccessDeniedRecorder($this->makeAudit());
+        $this->roleRepo = new RoleRepository($this->db);
+        $this->roleService = new RoleService($this->db, $this->roleRepo, new PermissionRepository($this->db), $this->policy, $this->makeAudit(), $denied);
+        return $services + [
+            UserController::class => new UserController($this->userService, $this->policy),
+            RoleController::class => new RoleController($this->roleService, $this->policy),
+            InvitationController::class => new InvitationController($this->verify),
+        ];
+    }
+
+    /** Membangun ulang UserService (mis. setelah mengubah $inviteMax/$pendingMax/$resendMax di dalam tes). */
+    protected function buildUserService(): void
+    {
         $clock = fn (): int => $this->now;
         $denied = new AccessDeniedRecorder($this->makeAudit());
         $this->roleRepo = new RoleRepository($this->db);
@@ -43,14 +59,20 @@ abstract class UserHarness extends BranchHarness
             $sender,
             $this->hasher,
             new RateLimiter($this->db, $this->resendMax, 3600, $clock),
+            new RateLimiter($this->db, $this->inviteMax, 3600, $clock),
+            $this->pendingMax,
             $clock
         );
-        $this->roleService = new RoleService($this->db, $this->roleRepo, new PermissionRepository($this->db), $this->policy, $this->makeAudit(), $denied);
-        return $services + [
-            UserController::class => new UserController($this->userService, $this->policy),
-            RoleController::class => new RoleController($this->roleService, $this->policy),
-            InvitationController::class => new InvitationController($this->verify),
-        ];
+    }
+
+    protected function rebuild(): void
+    {
+        $this->buildUserService();
+    }
+
+    protected function nowStr(): string
+    {
+        return gmdate('Y-m-d H:i:s', $this->now);
     }
 
     protected function roleId(int $tenantId, string $slug): int

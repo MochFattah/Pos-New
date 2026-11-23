@@ -32,6 +32,15 @@ return [
         'max_attempts' => (int) Env::get('INVITATION_RESEND_MAX_ATTEMPTS', '3'),
         'window_seconds' => (int) Env::get('INVITATION_RESEND_WINDOW_SECONDS', '3600'),
     ],
+    // Undangan pengguna baru: kuota per tenant (jendela geser) dan batas undangan yang belum diterima.
+    // Menahan penyalahgunaan (pemakaian email sebagai relay, penguncian email orang lain).
+    'invite' => [
+        'max_attempts' => (int) Env::get('INVITE_MAX_ATTEMPTS', '20'),
+        'window_seconds' => (int) Env::get('INVITE_WINDOW_SECONDS', '3600'),
+        'max_pending' => (int) Env::get('INVITE_MAX_PENDING', '50'),
+        // Baris pengguna pending non-Owner yang lebih tua dari ini (dan tanpa token valid) dianggap basi: emailnya dibebaskan.
+        'stale_seconds' => (int) Env::get('INVITE_STALE_SECONDS', '86400'),
+    ],
     'invitation_token' => ['ttl_seconds' => 86400],
     'reset_token' => ['ttl_seconds' => 3600],
     'verification_token' => ['ttl_seconds' => 86400],

@@ -57,6 +57,54 @@ class UserRepository
         return $this->db->lastInsertId();
     }
 
+    /** Jumlah pengguna non-Owner yang masih menunggu undangan diterima di tenant ini. */
+    public function countPendingNonOwner(int $tenantId): int
+    {
+        $row = $this->db->fetchOne(
+            "SELECT COUNT(*) AS n FROM users WHERE tenant_id = ? AND status = 'pending_verification' AND is_owner = 0",
+            [$tenantId]
+        );
+        return (int) ($row['n'] ?? 0);
+    }
+
+    /**
+     * Membebaskan email dari baris undangan basi: status pending_verification, bukan Owner, dibuat sebelum
+     * $createdBefore, dan tanpa token verifikasi yang masih berlaku (belum dipakai dan belum kedaluwarsa).
+     * Semua syarat dicek atomik di SQL; dipanggil di dalam transaksi pemanggil. Token, role, dan akses cabang
+     * baris itu ikut dihapus dengan tenant_id baris itu sendiri. Mengembalikan [id, tenant_id] baris yang
+     * dihapus, atau null bila email tidak ada / tidak memenuhi syarat.
+     *
+     * @return array{id: int, tenant_id: int}|null
+     */
+    public function reclaimStalePending(string $email, string $now, string $createdBefore): ?array
+    {
+        $row = $this->findByEmail($email);
+        if ($row === null) {
+            return null;
+        }
+        $id = (int) $row['id'];
+        $tenantId = (int) $row['tenant_id'];
+        $params = [$id, $tenantId, $createdBefore, $now];
+        $eligible = $this->db->fetchOne(
+            "SELECT id FROM users WHERE id = ? AND tenant_id = ? AND status = 'pending_verification' AND is_owner = 0 AND created_at < ?
+             AND NOT EXISTS (SELECT 1 FROM email_verifications v WHERE v.user_id = users.id AND v.used_at IS NULL AND v.expires_at > ?)",
+            $params
+        );
+        if ($eligible === null) {
+            return null;
+        }
+        $this->db->execute('DELETE FROM user_branch_access WHERE tenant_id = ? AND user_id = ?', [$tenantId, $id]);
+        $this->db->execute('DELETE FROM user_roles WHERE tenant_id = ? AND user_id = ?', [$tenantId, $id]);
+        $this->db->execute('DELETE FROM email_verifications WHERE user_id = ?', [$id]);
+        $this->db->execute('DELETE FROM password_resets WHERE user_id = ?', [$id]);
+        $deleted = $this->db->execute(
+            "DELETE FROM users WHERE id = ? AND tenant_id = ? AND status = 'pending_verification' AND is_owner = 0 AND created_at < ?
+             AND NOT EXISTS (SELECT 1 FROM email_verifications v WHERE v.user_id = users.id AND v.used_at IS NULL AND v.expires_at > ?)",
+            $params
+        );
+        return $deleted === 1 ? ['id' => $id, 'tenant_id' => $tenantId] : null;
+    }
+
     public function activate(int $tenantId, int $userId, string $now, ?string $passwordHash = null): bool
     {
         if ($passwordHash === null) {

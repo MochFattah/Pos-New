@@ -42,6 +42,8 @@ final class UserService
 
     private const DUPLICATE_EMAIL = 'Email sudah terdaftar.';
     private const MAIL_FAILED = 'Gagal mengirim email undangan. Tidak ada yang disimpan; coba lagi beberapa saat lagi.';
+    private const INVITE_LIMITED = 'Terlalu banyak undangan dikirim dalam waktu singkat. Coba lagi nanti.';
+    private const INVITE_PENDING_FULL = 'Terlalu banyak undangan yang belum diterima. Batalkan atau tunggu undangan sebelumnya diterima sebelum mengundang lagi.';
     private const RESEND_LIMITED = 'Terlalu banyak kirim ulang undangan untuk pengguna ini. Coba lagi nanti.';
 
     private Closure $clock;
@@ -58,7 +60,10 @@ final class UserService
         private readonly InvitationEmailSender $invitations,
         private readonly PasswordHasher $hasher,
         private readonly RateLimiter $resendLimiter,
+        private readonly RateLimiter $inviteLimiter,
+        private readonly int $maxPendingInvites = 50,
         ?callable $clock = null,
+        private readonly int $staleSeconds = 86400,
     ) {
         $this->clock = $clock !== null ? Closure::fromCallable($clock) : static fn (): int => time();
     }
@@ -127,14 +132,33 @@ final class UserService
         }
         $data = $result->validated();
         $phone = ($data['phone'] ?? '') === '' ? null : $data['phone'];
-        if ($this->users->findByEmail($data['email']) !== null) {
+        // Kuota per tenant; setiap percobaan yang lolos validasi dihitung (termasuk yang ditolak duplikat),
+        // jadi tidak bisa dipakai menebak email tanpa batas.
+        $quotaKey = 'invite:tenant:' . $actor->tenantId;
+        if ($this->inviteLimiter->tooManyAttempts($quotaKey, 'invite')) {
+            throw new ValidationException(['form' => self::INVITE_LIMITED]);
+        }
+        $this->inviteLimiter->record($quotaKey, 'invite', false);
+        if ($this->users->countPendingNonOwner($actor->tenantId) >= $this->maxPendingInvites) {
+            throw new ValidationException(['form' => self::INVITE_PENDING_FULL]);
+        }
+        $existing = $this->users->findByEmail($data['email']);
+        if ($existing !== null && !$this->isReclaimable($existing)) {
             throw new ValidationException(['email' => self::DUPLICATE_EMAIL]);
         }
         // Hash acak yang tak pernah diketahui siapa pun: akun tidak bisa dimasuki sebelum undangan diterima.
         $placeholder = $this->hasher->hash(bin2hex(random_bytes(32)));
         $now = $this->now();
         try {
-            return $this->db->transaction(function () use ($actor, $data, $phone, $placeholder, $now): int {
+            return $this->db->transaction(function () use ($actor, $data, $phone, $placeholder, $now, $existing): int {
+                if ($existing !== null) {
+                    $cutoff = gmdate('Y-m-d H:i:s', ($this->clock)() - $this->staleSeconds);
+                    $gone = $this->users->reclaimStalePending($data['email'], $now, $cutoff);
+                    if ($gone === null) {
+                        throw new DuplicateEmailException();
+                    }
+                    $this->log('user.stale_invite_reclaimed', $actor, $gone['id'], ['previous_tenant_id' => $gone['tenant_id']]);
+                }
                 $id = $this->users->create($actor->tenantId, $data['name'], $data['email'], $phone, $placeholder, false, 'pending_verification', $now);
                 $this->log('user.invited', $actor, $id, ['email' => $data['email']]);
                 $this->invitations->send($id, $data['email'], $data['name']);
@@ -145,6 +169,14 @@ final class UserService
         } catch (MailException) {
             throw new ValidationException(['form' => self::MAIL_FAILED]);
         }
+    }
+
+    /** Pra-pemeriksaan murah; penentu sebenarnya adalah penjaga atomik di UserRepository::reclaimStalePending. */
+    private function isReclaimable(array $user): bool
+    {
+        return $user['status'] === 'pending_verification'
+            && (int) $user['is_owner'] === 0
+            && strtotime((string) $user['created_at'] . ' UTC') < ($this->clock)() - $this->staleSeconds;
     }
 
     /** @throws ValidationException bila pengguna bukan pending non-Owner atau terlalu sering dikirim ulang */

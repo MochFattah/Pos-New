@@ -245,7 +245,17 @@ $buildUserController = static function () use ($buildAuditLogger, $sharedDb, $sh
         new AccessDeniedRecorder($buildAuditLogger($db)),
         $sender,
         new PasswordHasher(),
-        $resendLimiter
+        $resendLimiter,
+        new RateLimiter(
+            $db,
+            (int) Config::get('security.invite.max_attempts', 20),
+            (int) Config::get('security.invite.window_seconds', 3600),
+            null,
+            $limiterRetention()
+        ),
+        (int) Config::get('security.invite.max_pending', 50),
+        null,
+        (int) Config::get('security.invite.stale_seconds', 86400)
     );
     return new UserController($service, $policy);
 };

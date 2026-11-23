@@ -85,12 +85,162 @@ final class UserTest extends UserHarness
             new \App\Core\Authorization\AccessDeniedRecorder($this->makeAudit()),
             new \App\Modules\Auth\Services\InvitationEmailSender(new \App\Modules\Auth\Repositories\EmailVerificationRepository($this->db), new \App\Core\Security\TokenService(), $this->mailer, self::APP_URL, 86400),
             $this->hasher,
-            new \App\Core\Security\RateLimiter($this->db, 3, 3600)
+            new \App\Core\Security\RateLimiter($this->db, 3, 3600),
+            new \App\Core\Security\RateLimiter($this->db, 20, 3600)
         );
         $mails = count($this->mailer->sent);
         $this->assertThrows(ValidationException::class, fn () => $service->invite($t['owner'], ['name' => 'X', 'email' => 'staf@example.com']));
         $this->assertSame($mails, count($this->mailer->sent));
         $this->assertSame(1, $this->auditCount('user.invited'));
+    }
+
+    // --- F-02: kuota undangan dan pembebasan email basi ---
+
+    private function assertInviteRejected(array $t, string $email, string $key, string $message): void
+    {
+        try {
+            $this->invite($t, $email);
+            $this->fail('Undangan harus ditolak');
+        } catch (ValidationException $e) {
+            $this->assertSame([$key => $message], $e->errors());
+        }
+    }
+
+    public function testInviteRateLimitedPerTenantWithIndonesianError(): void
+    {
+        $this->inviteMax = 3;
+        $this->rebuild();
+        $t = $this->tenant();
+        $other = $this->tenant('lain@example.com');
+        foreach (['a', 'b', 'c'] as $n) {
+            $this->invite($t, "$n@example.com");
+        }
+        $mails = count($this->mailer->sent);
+        $this->assertInviteRejected($t, 'd@example.com', 'form', 'Terlalu banyak undangan dikirim dalam waktu singkat. Coba lagi nanti.');
+        $this->assertSame($mails, count($this->mailer->sent));
+        $this->assertSame(0, $this->count("SELECT COUNT(*) AS n FROM users WHERE email = 'd@example.com'"));
+        $this->invite($other, 'e@example.com'); // tenant lain tidak terdampak
+        $this->now += 3601; // jendela lewat
+        $this->invite($t, 'd@example.com');
+    }
+
+    public function testInviteAttemptsRejectedAsDuplicateStillCountTowardsQuota(): void
+    {
+        $this->inviteMax = 2;
+        $this->rebuild();
+        $t = $this->tenant();
+        $this->assertInviteRejected($t, 'budi@example.com', 'email', 'Email sudah terdaftar.');
+        $this->assertInviteRejected($t, 'budi@example.com', 'email', 'Email sudah terdaftar.');
+        $this->assertInviteRejected($t, 'x@example.com', 'form', 'Terlalu banyak undangan dikirim dalam waktu singkat. Coba lagi nanti.');
+    }
+
+    public function testInviteRefusedWhenTenantHasTooManyPendingInvites(): void
+    {
+        $this->pendingMax = 2;
+        $this->rebuild();
+        $t = $this->tenant();
+        $other = $this->tenant('lain@example.com');
+        $this->invite($t, 'a@example.com');
+        $this->invite($t, 'b@example.com');
+        $this->assertInviteRejected($t, 'c@example.com', 'form', 'Terlalu banyak undangan yang belum diterima. Batalkan atau tunggu undangan sebelumnya diterima sebelum mengundang lagi.');
+        $this->invite($other, 'c@example.com'); // kuota per tenant
+    }
+
+    private function ageHours(int $hours): void
+    {
+        $this->now += $hours * 3600;
+    }
+
+    public function testStalePendingInviteIsReclaimedByAnotherTenant(): void
+    {
+        $a = $this->tenant('a@example.com');
+        $b = $this->tenant('b@example.com');
+        $oldId = $this->invite($a, 'korban@example.com');
+        $role = $this->roleId($a['tenantId'], 'kasir');
+        $this->userService->assignRoles($a['owner'], $oldId, [$role]);
+        $branch = (int) $this->db->fetchOne('SELECT id FROM branches WHERE tenant_id = ?', [$a['tenantId']])['id'];
+        $this->users->addBranch($a['tenantId'], $oldId, $branch);
+        $keep = $this->invite($a, 'lain-a@example.com');
+
+        $this->ageHours(25);
+        $newId = $this->invite($b, 'Korban@Example.com');
+
+        $this->assertTrue($newId !== $oldId);
+        $this->assertSame(null, $this->users->findById($a['tenantId'], $oldId));
+        $this->assertSame($b['tenantId'], (int) $this->users->findById($b['tenantId'], $newId)['tenant_id']);
+        $this->assertSame(0, $this->count('SELECT COUNT(*) AS n FROM email_verifications WHERE user_id = ?', [$oldId]));
+        $this->assertSame(0, $this->count('SELECT COUNT(*) AS n FROM user_roles WHERE user_id = ?', [$oldId]));
+        $this->assertSame(0, $this->count('SELECT COUNT(*) AS n FROM user_branch_access WHERE user_id = ?', [$oldId]));
+        // Isolasi: baris tenant A lain tidak tersentuh, dan audit tercatat di tenant aktor (B).
+        $this->assertTrue($this->users->findById($a['tenantId'], $keep) !== null);
+        $row = $this->db->fetchOne("SELECT tenant_id, entity_id FROM audit_logs WHERE action = 'user.stale_invite_reclaimed'");
+        $this->assertSame($b['tenantId'], (int) $row['tenant_id']);
+        $this->assertSame($oldId, (int) $row['entity_id']);
+        $this->assertSame($a['tenantId'], (int) $this->lastAudit('user.stale_invite_reclaimed')['previous_tenant_id']);
+        $this->assertSame(1, $this->auditCount('user.invited') - 2);
+    }
+
+    public function testStalePendingInviteIsReclaimedBySameTenant(): void
+    {
+        $a = $this->tenant();
+        $old = $this->invite($a, 'staf@example.com');
+        $this->ageHours(25);
+        $new = $this->invite($a, 'staf@example.com');
+        $this->assertTrue($new !== $old);
+        $this->assertSame(1, $this->count("SELECT COUNT(*) AS n FROM users WHERE email = 'staf@example.com'"));
+    }
+
+    public function testFreshPendingInviteIsNotReclaimed(): void
+    {
+        $a = $this->tenant('a@example.com');
+        $b = $this->tenant('b@example.com');
+        $this->invite($a, 'korban@example.com');
+        $this->ageHours(23);
+        $this->assertInviteRejected($b, 'korban@example.com', 'email', 'Email sudah terdaftar.');
+    }
+
+    public function testOldPendingInviteWithValidTokenIsNotReclaimed(): void
+    {
+        $a = $this->tenant('a@example.com');
+        $b = $this->tenant('b@example.com');
+        $id = $this->invite($a, 'korban@example.com');
+        $this->ageHours(25);
+        $this->userService->resendInvite($a['owner'], $id); // token baru, masih berlaku
+        $this->assertInviteRejected($b, 'korban@example.com', 'email', 'Email sudah terdaftar.');
+        $this->assertTrue($this->users->findById($a['tenantId'], $id) !== null);
+    }
+
+    public function testActiveOrOwnerUsersAreNeverReclaimed(): void
+    {
+        $a = $this->tenant('a@example.com');
+        $b = $this->tenant('b@example.com');
+        $id = $this->invite($a, 'aktif@example.com');
+        $this->users->activate($a['tenantId'], $id, $this->nowStr());
+        $this->ageHours(48);
+        $this->assertInviteRejected($b, 'aktif@example.com', 'email', 'Email sudah terdaftar.');
+        $this->assertInviteRejected($b, 'a@example.com', 'email', 'Email sudah terdaftar.');
+        // Owner pending lama (tanpa token berlaku) juga tidak dibebaskan.
+        $this->db->execute("UPDATE users SET status = 'pending_verification', email_verified_at = NULL WHERE id = ?", [$a['ownerId']]);
+        $this->db->execute('DELETE FROM email_verifications WHERE user_id = ?', [$a['ownerId']]);
+        $this->assertInviteRejected($b, 'a@example.com', 'email', 'Email sudah terdaftar.');
+        $this->assertTrue($this->users->findById($a['tenantId'], $a['ownerId']) !== null);
+    }
+
+    public function testStalePendingInviteDoesNotBlockRegistration(): void
+    {
+        $a = $this->tenant('a@example.com');
+        $this->invite($a, 'korban@example.com');
+        $this->ageHours(25);
+        $r = $this->register->register(['business_name' => 'Toko Korban', 'owner_name' => 'Korban', 'email' => 'korban@example.com', 'password' => 'sandi-korban-123']);
+        $this->assertSame(1, (int) $this->users->findById($r['tenantId'], $r['userId'])['is_owner']);
+        $this->assertSame($r['tenantId'], (int) $this->db->fetchOne("SELECT tenant_id FROM audit_logs WHERE action = 'user.stale_invite_reclaimed'")['tenant_id']);
+    }
+
+    public function testRegistrationStillRejectsFreshInviteWithNeutralError(): void
+    {
+        $a = $this->tenant('a@example.com');
+        $this->invite($a, 'korban@example.com');
+        $this->assertThrows(\App\Modules\Tenants\Exceptions\DuplicateEmailException::class, fn () => $this->register->register(['business_name' => 'T', 'owner_name' => 'K', 'email' => 'korban@example.com', 'password' => 'sandi-korban-123']));
     }
 
     public function testInviteValidatesInput(): void
