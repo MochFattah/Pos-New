@@ -66,6 +66,16 @@ function assert(cond, message) {
 }
 const go = (page, path) => page.goto(server.url + path);
 const active = (page) => page.evaluate(() => { const a = document.activeElement; return a ? (a.id || a.getAttribute('data-drawer-close') !== null && 'drawer-close' || a.textContent.trim().slice(0, 40) || a.tagName) : null; });
+/** Menunggu kondisi sungguhan (bukan tidur tetap); mengembalikan nilai truthy terakhir. */
+async function poll(cond, message = 'kondisi tidak terpenuhi', timeout = 10000) {
+    const end = Date.now() + timeout;
+    for (;;) {
+        const v = await cond();
+        if (v) return v;
+        if (Date.now() > end) throw new Error('timeout: ' + message);
+        await new Promise((r) => setTimeout(r, 25));
+    }
+}
 const posts = (path) => server.log.filter((r) => r.method === 'POST' && r.path === path);
 
 // --- Tanpa galat konsol di setiap halaman, dengan CSP ketat dari aplikasi ---
@@ -103,7 +113,7 @@ await test('drawer: buka/tutup, aria-expanded, fokus masuk, inert, Esc, fokus ke
     assert((await drawer.getAttribute('data-open')) === 'true', 'data-open true');
     assert(await drawer.evaluate((el) => el.contains(document.activeElement)), 'fokus harus pindah ke dalam drawer');
     assert(await page.evaluate(() => document.querySelector('.topbar').inert && document.querySelector('#main-content').inert), 'latar (topbar, main) harus inert');
-    await page.waitForTimeout(350);
+    await page.waitForFunction(() => document.querySelector('#navigasi').getBoundingClientRect().x >= 0);
     assert((await drawer.boundingBox()).x >= 0, 'drawer harus tampak di layar');
     await page.keyboard.press('Escape');
     assert((await opener.getAttribute('aria-expanded')) === 'false', 'Esc menutup drawer');
@@ -177,7 +187,7 @@ await test('layout: sidebar desktop menempel dan setinggi viewport saat halaman 
 await test('drawer: tanpa JS tetap bisa dibuka lewat :target', async (page) => {
     await go(page, '/beranda');
     await page.locator('[data-drawer-open]').click();
-    await page.waitForTimeout(350);
+    await poll(async () => (await page.locator('#navigasi').boundingBox()).x >= 0); // boundingBox lewat protokol: jalan tanpa JS
     assert((await page.locator('#navigasi').boundingBox()).x >= 0, 'sidebar harus tampil saat :target');
     await page.locator('#navigasi a.nav-item').nth(1).click();
     assert(page.url().endsWith('/cabang'), 'tautan menu bekerja tanpa JS');
@@ -256,6 +266,7 @@ await test('form: kirim ganda dicegah, aria-busy dipasang, teks dipertahankan, p
     await page.fill('#password', 'rahasia-banget');
     const btn = page.locator('form button[type="submit"]').first();
     const text = (await btn.textContent()).trim();
+    const posted = page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/masuk');
     // Tiga upaya kirim berturut-turut dalam satu tick (klik ganda + Enter); status dibaca di tick yang sama
     // karena respons server (POST /masuk) bisa tiba dan mengganti dokumen sebelum pembacaan terpisah.
     const state = await btn.evaluate((el) => {
@@ -267,8 +278,10 @@ await test('form: kirim ganda dicegah, aria-busy dipasang, teks dipertahankan, p
     assert(state.busy === 'true', 'aria-busy saat mengirim');
     assert(state.disabled === 'true', 'aria-disabled saat mengirim');
     assert(state.text === text, 'teks tombol dipertahankan');
-    await page.waitForLoadState('load');
-    await page.waitForTimeout(600);
+    // Tunggu respons POST (kondisi nyata, bukan tidur); semua kiriman ganda sudah dikirim pada tick yang sama
+    // sehingga sudah tercatat di log server sebelum respons pertama kembali.
+    await posted;
+    await page.waitForFunction(() => document.readyState === 'complete' && !document.querySelector('form button[aria-busy="true"]'));
     assert(posts('/masuk').length === 1, `tepat 1 POST /masuk, dapat ${posts('/masuk').length}`);
     // Halaman hasil (galat) lalu kembali: tombol harus aktif lagi.
     await page.goBack();
@@ -386,13 +399,11 @@ await test('tema: keadaan tekan tombol tema terlihat berbeda (bukan hanya aria-p
     const toggle = page.locator('[data-theme-toggle]');
     const look = () => toggle.evaluate((el) => { const c = getComputedStyle(el); return [c.backgroundColor, c.borderTopColor, c.color, c.fontWeight].join('|'); });
     await toggle.evaluate((el) => el.setAttribute('aria-pressed', 'false'));
-    await page.waitForTimeout(300); // lewati transisi warna
     const off = await look();
     await toggle.evaluate((el) => el.setAttribute('aria-pressed', 'true'));
-    await page.waitForTimeout(300);
-    const on = await look();
+    const on = await poll(async () => (await look()) !== off && (await look()), 'tampilan tombol tidak berubah').catch(() => look());
     assert(off !== on, 'tampilan tombol harus berbeda saat aria-pressed=true, sama: ' + on);
-});
+}, { reducedMotion: 'reduce' }); // tanpa transisi warna: gaya terhitung langsung final
 await test('tema: tanpa JS tombol tema tersembunyi dan halaman tetap terbaca', async (page) => {
     await go(page, '/beranda');
     assert(!(await page.locator('[data-theme-toggle]').isVisible()), 'tombol tema memerlukan JS');
