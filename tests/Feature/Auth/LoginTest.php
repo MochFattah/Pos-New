@@ -318,4 +318,33 @@ final class LoginTest extends AuthHarness
         $this->assertSame('no-store', $bad->header('Cache-Control'));
         $this->assertSame('no-referrer', $bad->header('Referrer-Policy'));
     }
+
+    public function testLoginRehashesOutdatedHashAndKeepsSessionValid(): void
+    {
+        $r = $this->activeOwner();
+        $old = password_hash(self::PASSWORD, PASSWORD_BCRYPT, ['cost' => 4]);
+        $this->db->execute('UPDATE users SET password_hash = ? WHERE id = ?', [$old, $r['userId']]);
+        $this->assertTrue($this->hasher->needsRehash($old));
+
+        $this->assertSame(302, $this->login()->status());
+
+        $stored = (string) $this->users->findById($r['tenantId'], $r['userId'])['password_hash'];
+        $this->assertTrue($stored !== $old, 'hash lama diganti');
+        $this->assertFalse($this->hasher->needsRehash($stored));
+        $this->assertTrue($this->hasher->verify(self::PASSWORD, $stored), 'password yang sama tetap berlaku');
+        $this->assertTrue($this->auth->userFromSession($this->session) !== null, 'sidik jari sesi mengikuti hash baru');
+    }
+
+    public function testLoginKeepsCurrentHashAndDoesNotRehashOnFailure(): void
+    {
+        $r = $this->activeOwner();
+        $current = (string) $this->users->findById($r['tenantId'], $r['userId'])['password_hash'];
+        $this->assertSame(302, $this->login()->status());
+        $this->assertSame($current, (string) $this->users->findById($r['tenantId'], $r['userId'])['password_hash']);
+
+        $old = password_hash(self::PASSWORD, PASSWORD_BCRYPT, ['cost' => 4]);
+        $this->db->execute('UPDATE users SET password_hash = ? WHERE id = ?', [$old, $r['userId']]);
+        $this->assertSame(AuthResult::FAILED, $this->auth->attempt('budi@example.com', 'salah-total', '9.9.9.9', $this->session)->status);
+        $this->assertSame($old, (string) $this->users->findById($r['tenantId'], $r['userId'])['password_hash']);
+    }
 }

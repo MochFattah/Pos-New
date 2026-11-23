@@ -84,12 +84,21 @@ final class AuthService
         }
 
         $this->limiter->clear($email, $ip);
+        $storedHash = (string) $user['password_hash'];
+        if ($this->hasher->needsRehash($storedHash)) {
+            // Biaya hash naik sejak hash ini dibuat: simpan ulang dari password yang baru terbukti benar.
+            // Sidik jari sesi di bawah memakai hash baru, sehingga sesi yang sedang masuk ini tidak tercabut.
+            $newHash = $this->hasher->hash($password);
+            if ($this->users->updatePassword($authUser->tenantId, $authUser->id, $newHash, gmdate('Y-m-d H:i:s', ($this->clock)()))) {
+                $storedHash = $newHash;
+            }
+        }
         // Satu cookie, dua sisi: masuk sebagai tenant menghapus identitas platform (tak ada pencampuran hak akses).
         \App\Modules\Platform\Services\PlatformAuthService::forgetKeys($session);
         $session->regenerate();
         $session->set(self::SESSION_USER, $authUser->id);
         $session->set(self::SESSION_TENANT, $authUser->tenantId);
-        $session->set(self::SESSION_FINGERPRINT, self::fingerprint((string) $user['password_hash']));
+        $session->set(self::SESSION_FINGERPRINT, self::fingerprint($storedHash));
         $this->users->touchLastLogin($authUser->tenantId, $authUser->id, gmdate('Y-m-d H:i:s', ($this->clock)()));
         $this->audit->record('auth.login', $authUser->tenantId, AuditLogger::ACTOR_TENANT_USER, $authUser->id, 'user', $authUser->id);
         return AuthResult::ok($authUser);
@@ -132,6 +141,8 @@ final class AuthService
      * di dalam sesi tersebut (mis. halaman ubah password), agar sesi ini tidak ikut tercabut sementara
      * sesi lain tetap tercabut. Tidak berbuat apa-apa untuk sesi yang belum masuk atau pengguna nonaktif.
      * Dipanggil SETELAH hash baru tersimpan.
+     *
+     * Belum dipakai di produksi: kait untuk fitur ubah password (belum ada); baru dicakup tes.
      */
     public function refreshSessionFingerprint(Session $session): void
     {
