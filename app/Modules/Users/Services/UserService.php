@@ -158,6 +158,8 @@ final class UserService
                         throw new DuplicateEmailException();
                     }
                     $this->log('user.stale_invite_reclaimed', $actor, $gone['id'], ['previous_tenant_id' => $gone['tenant_id']]);
+                    // Tenant asal juga perlu jejak; tanpa email dan tanpa identitas tenant pengundang baru.
+                    $this->audit->record('user.stale_invite_reclaimed_lost', $gone['tenant_id'], AuditLogger::ACTOR_SYSTEM, null, 'user', $gone['id'], []);
                 }
                 $id = $this->users->create($actor->tenantId, $data['name'], $data['email'], $phone, $placeholder, false, 'pending_verification', $now);
                 $this->log('user.invited', $actor, $id, ['email' => $data['email']]);

@@ -92,6 +92,7 @@ final class RegisterTenantService
             );
             if ($reclaimed !== null) {
                 $this->audit->record('user.stale_invite_reclaimed', $tenantId, AuditLogger::ACTOR_TENANT_USER, $userId, 'user', $reclaimed['id'], ['previous_tenant_id' => $reclaimed['tenant_id']]);
+                $this->audit->record('user.stale_invite_reclaimed_lost', $reclaimed['tenant_id'], AuditLogger::ACTOR_SYSTEM, null, 'user', $reclaimed['id'], []);
             }
             $this->sender->send($userId, $email, $input['owner_name']);
             return ['tenantId' => $tenantId, 'userId' => $userId];

@@ -724,4 +724,38 @@ final class UserTest extends UserHarness
         $t = $this->tenant();
         $this->assertThrows(\App\Modules\Tenants\Exceptions\DuplicateEmailException::class, fn () => $this->users->create($t['tenantId'], 'Dup', 'BUDI@example.com', null, 'x', false, 'pending_verification', '2027-01-01 00:00:00'));
     }
+
+    public function testReclaimWritesAuditRowUnderOldTenantWithoutEmail(): void
+    {
+        $a = $this->tenant('a@example.com');
+        $b = $this->tenant('b@example.com');
+        $oldId = $this->invite($a, 'korban@example.com');
+        $this->ageHours(25);
+        $this->invite($b, 'korban@example.com');
+        $row = $this->db->fetchOne("SELECT * FROM audit_logs WHERE action = 'user.stale_invite_reclaimed_lost'");
+        $this->assertTrue($row !== null);
+        $this->assertSame($a['tenantId'], (int) $row['tenant_id']);
+        $this->assertSame($oldId, (int) $row['entity_id']);
+        $this->assertFalse(stripos(json_encode($row), 'korban@') !== false, 'tanpa email');
+    }
+
+    public function testReclaimAbortsWhenFreshTokenAppearsAfterEligibilityCheck(): void
+    {
+        $a = $this->tenant('a@example.com');
+        $oldId = $this->invite($a, 'korban@example.com');
+        $this->db->execute('DELETE FROM email_verifications WHERE user_id = ?', [$oldId]);
+        $roleId = (int) $this->db->fetchOne('SELECT id FROM roles WHERE tenant_id = ? LIMIT 1', [$a['tenantId']])['id'];
+        $this->db->execute('INSERT INTO user_roles (tenant_id, user_id, role_id) VALUES (?, ?, ?)', [$a['tenantId'], $oldId, $roleId]);
+        // Simulasi resendInvite bersamaan: token baru muncul tepat saat anak-anak baris dihapus.
+        $this->db->execute(
+            "CREATE TRIGGER race_token BEFORE DELETE ON user_roles BEGIN
+             INSERT INTO email_verifications (user_id, token_hash, expires_at, created_at) VALUES (OLD.user_id, 'race', '2099-01-01 00:00:00', '2026-01-01 00:00:00'); END"
+        );
+        $this->ageHours(25);
+        $now = gmdate('Y-m-d H:i:s', $this->now);
+        $cutoff = gmdate('Y-m-d H:i:s', $this->now - 3600);
+        $this->assertSame(null, $this->users->reclaimStalePending('korban@example.com', $now, $cutoff));
+        $this->assertTrue($this->users->findById($a['tenantId'], $oldId) !== null, 'pengguna tidak dihapus');
+        $this->assertSame(1, $this->count('SELECT COUNT(*) AS n FROM email_verifications WHERE user_id = ?', [$oldId]));
+    }
 }

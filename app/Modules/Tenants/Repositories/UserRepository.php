@@ -95,7 +95,8 @@ class UserRepository
         }
         $this->db->execute('DELETE FROM user_branch_access WHERE tenant_id = ? AND user_id = ?', [$tenantId, $id]);
         $this->db->execute('DELETE FROM user_roles WHERE tenant_id = ? AND user_id = ?', [$tenantId, $id]);
-        $this->db->execute('DELETE FROM email_verifications WHERE user_id = ? ', [$id]);
+        // Hanya token terpakai/kedaluwarsa; token valid (mis. hasil kirim ulang bersamaan) membuat guard akhir gagal -> rollback.
+        $this->db->execute('DELETE FROM email_verifications WHERE user_id = ? AND (used_at IS NOT NULL OR expires_at <= ?)', [$id, $now]);
         $this->db->execute('DELETE FROM password_resets WHERE user_id = ?', [$id]);
         $deleted = $this->db->execute(
             "DELETE FROM users WHERE id = ? AND tenant_id = ? AND status = 'pending_verification' AND is_owner = 0 AND created_at < ?
