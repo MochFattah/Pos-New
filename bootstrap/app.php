@@ -111,7 +111,8 @@ $limiterRetention = static fn (): int => max(
     (int) Config::get('security.reset_request.window_seconds', 3600),
     (int) Config::get('security.registration.window_seconds', 3600),
     (int) Config::get('security.invitation_resend.window_seconds', 3600),
-    (int) Config::get('security.platform_login.window_seconds', 900)
+    (int) Config::get('security.platform_login.window_seconds', 900),
+    (int) Config::get('security.invite.window_seconds', 3600)
 );
 
 $buildRegisterController = static function () use ($buildAuditLogger, $sharedDb, $limiterRetention): RegisterController {
