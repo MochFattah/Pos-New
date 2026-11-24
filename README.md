@@ -4,6 +4,8 @@ Aplikasi POS Retail multi-tenant (SaaS) berbasis PHP native. Repositori ini beri
 
 Sumber kebenaran: `PRD.md` (kebutuhan), `DESAIN.md` (visual), `.cursorrules` (teknis), `docs/superpowers/specs/2026-11-08-foundation-design.md` (spesifikasi fondasi).
 
+Keputusan produk dan arsitektur ada di `docs/decisions/`; catatan revisi PRD v1.4 (verifikasi email wajib, demo dimulai saat verifikasi): `docs/decisions/0002-verifikasi-email-wajib.md`.
+
 ## Persyaratan
 
 - PHP 8.3+ dengan ekstensi `pdo_mysql`, `mbstring`, `fileinfo`, `openssl`
