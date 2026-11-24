@@ -29,6 +29,26 @@ class BranchRepository
         );
     }
 
+    /** @return list<array<string, mixed>> hanya cabang yang tercantum di user_branch_access pengguna itu (tenant yang sama) */
+    public function listForUser(int $tenantId, int $userId): array
+    {
+        return $this->db->query(
+            'SELECT b.* FROM branches b
+             JOIN user_branch_access a ON a.tenant_id = b.tenant_id AND a.branch_id = b.id
+             WHERE b.tenant_id = ? AND a.tenant_id = ? AND a.user_id = ?
+             ORDER BY b.is_main DESC, b.name ASC, b.id ASC',
+            [$tenantId, $tenantId, $userId]
+        );
+    }
+
+    public function grantAccess(int $tenantId, int $userId, int $branchId): void
+    {
+        $this->db->execute(
+            'INSERT INTO user_branch_access (user_id, branch_id, tenant_id) VALUES (?, ?, ?)',
+            [$userId, $branchId, $tenantId]
+        );
+    }
+
     public function codeExists(int $tenantId, string $code, ?int $exceptId = null): bool
     {
         return $this->db->fetchOne(

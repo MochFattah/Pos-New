@@ -29,9 +29,11 @@ final class BranchController
         $session = $request->attribute('session');
         $notice = $session instanceof Session ? $session->pullFlash('notice') : null;
         $error = $session instanceof Session ? $session->pullFlash('error') : null;
+        $branches = $this->branches->list($user);
         return Response::html($this->view($request, 'branches/index', [
             'title' => 'Cabang',
-            'branches' => $this->branches->list($user),
+            'branches' => $branches,
+            'noAccess' => !$user->isOwner && $branches === [],
             'canManage' => $this->policy->can($user, BranchService::MANAGE),
             'csrf' => $this->csrf($request),
             'notice' => is_string($notice) ? $notice : null,

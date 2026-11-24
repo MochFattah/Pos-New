@@ -2,6 +2,7 @@
 /**
  * @var App\Core\View $this
  * @var list<array<string, mixed>> $branches
+ * @var bool $noAccess non-Owner tanpa baris user_branch_access
  * @var bool $canManage
  * @var string $csrf
  * @var string|null $notice
@@ -20,7 +21,11 @@
 <?php endif; ?>
 </div>
 <?= $this->partial('flash', ['notice' => $notice, 'error' => $error]) ?>
-<?php if ($branches === []): ?>
+<?php if ($noAccess): ?>
+<div class="empty-state">
+<p class="empty-state__title">Anda belum memiliki akses cabang. Hubungi Owner.</p>
+</div>
+<?php elseif ($branches === []): ?>
 <div class="empty-state">
 <p class="empty-state__title">Belum ada cabang</p>
 <p class="empty-state__body">Tambahkan cabang pertama untuk mulai mengatur lokasi usaha Anda.</p>

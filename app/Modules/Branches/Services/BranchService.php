@@ -41,11 +41,18 @@ final class BranchService
         $this->clock = $clock ?? static fn (): int => time();
     }
 
-    /** @return list<array<string, mixed>> */
+    /**
+     * Owner melihat semua cabang tenant; pengguna lain hanya cabang di user_branch_access
+     * (tanpa baris akses = daftar kosong, gagal tertutup).
+     *
+     * @return list<array<string, mixed>>
+     */
     public function list(AuthUser $actor): array
     {
         $this->policy->authorize($actor, self::VIEW);
-        return $this->branches->listByTenant($actor->tenantId);
+        return $actor->isOwner
+            ? $this->branches->listByTenant($actor->tenantId)
+            : $this->branches->listForUser($actor->tenantId, $actor->id);
     }
 
     /** @return array<string, mixed> */
@@ -77,6 +84,11 @@ final class BranchService
             return $this->db->transaction(function () use ($actor, $data, $now): int {
                 $id = $this->branches->create($actor->tenantId, $data['code'], $data['name'], $data['address'], $data['phone'], $now);
                 $this->log('branch.created', $actor, $id, ['code' => $data['code'], 'name' => $data['name']]);
+                if (!$actor->isOwner) {
+                    // Pembuat non-Owner otomatis berhak atas cabang barunya; satu transaksi dengan pembuatan cabang.
+                    $this->branches->grantAccess($actor->tenantId, $actor->id, $id);
+                    $this->audit->record('user.branches_assigned', $actor->tenantId, AuditLogger::ACTOR_TENANT_USER, $actor->id, 'user', $actor->id, ['added' => [$id], 'removed' => [], 'reason' => 'branch_created']);
+                }
                 return $id;
             });
         } catch (DuplicateBranchCodeException) {

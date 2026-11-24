@@ -184,8 +184,8 @@ final class BranchTest extends BranchHarness
     public function testServiceChecksPermissionBeforeLookup(): void
     {
         $a = $this->activeOwner();
-        $viewer = $this->authUserFor($a['tenantId'], $this->makeUser($a['tenantId'], 'v@example.com', ['branches.view']));
         $main = $this->mainBranchId($a['tenantId']);
+        $viewer = $this->authUserFor($a['tenantId'], $this->makeUser($a['tenantId'], 'v@example.com', ['branches.view'], [$main]));
         $this->assertSame(1, count($this->branchService->list($viewer)));
         $this->assertThrows(ForbiddenException::class, fn () => $this->branchService->create($viewer, ['code' => 'X1', 'name' => 'x']));
         $this->assertThrows(ForbiddenException::class, fn () => $this->branchService->update($viewer, $main, ['code' => 'X1', 'name' => 'x']));
@@ -337,7 +337,7 @@ final class BranchTest extends BranchHarness
     public function testViewOnlyUserSeesListWithoutManageControlsAndGets403OnManage(): void
     {
         $a = $this->activeOwner();
-        $this->makeUser($a['tenantId'], 'lihat@example.com', ['branches.view']);
+        $this->makeUser($a['tenantId'], 'lihat@example.com', ['branches.view'], [$this->mainBranchId($a['tenantId'])]);
         $this->assertSame(302, $this->login('lihat@example.com')->status());
         $index = $this->send('GET', '/cabang');
         $this->assertSame(200, $index->status());
@@ -376,6 +376,81 @@ final class BranchTest extends BranchHarness
         $body = $this->send('GET', '/cabang')->body();
         $this->assertContains('Cabang Utama', $body);
         $this->assertFalse(str_contains($body, 'Rahasia'));
+    }
+
+    public function testBranchListIsFilteredToGrantedBranchesForNonOwnerAndOwnerSeesAll(): void
+    {
+        $a = $this->activeOwner();
+        $t = $a['tenantId'];
+        $second = $this->seedBranch($t, 'CAB2', 'Cabang Dua');
+        $this->seedBranch($t, 'CAB3', 'Cabang Tiga');
+        $other = $this->activeOwner('lain@example.com');
+        $this->seedBranch($other['tenantId'], 'ASING', 'Cabang Asing');
+        $staff = $this->authUserFor($t, $this->makeUser($t, 's@example.com', ['branches.view'], [$second]));
+        $this->assertSame([$second], array_map(static fn (array $b): int => (int) $b['id'], $this->branchService->list($staff)));
+        $owner = $this->authUserFor($t, $a['userId']);
+        $this->assertSame(3, count($this->branchService->list($owner)));
+    }
+
+    public function testNonOwnerWithoutAccessRowsSeesEmptyStateAndHasNoBranchAccess(): void
+    {
+        $a = $this->activeOwner();
+        $t = $a['tenantId'];
+        $main = $this->mainBranchId($t);
+        $uid = $this->makeUser($t, 'tanpa@example.com', ['branches.view', 'branches.manage']);
+        $staff = $this->authUserFor($t, $uid);
+        $this->assertSame([], $this->branchService->list($staff));
+        $this->assertFalse($this->policy->can($staff, 'branches.view', $main), 'gagal tertutup: tanpa baris akses tidak ada akses cabang');
+        $this->assertSame(302, $this->login('tanpa@example.com')->status());
+        $res = $this->send('GET', '/cabang');
+        $this->assertSame(200, $res->status());
+        $this->assertContains('Anda belum memiliki akses cabang. Hubungi Owner.', $res->body());
+        $this->assertFalse(str_contains($res->body(), 'Cabang Utama'));
+    }
+
+    public function testOwnerWithBranchesNeverSeesNoAccessMessage(): void
+    {
+        $this->ownerLoggedIn();
+        $this->assertFalse(str_contains($this->send('GET', '/cabang')->body(), 'Anda belum memiliki akses cabang'));
+    }
+
+    public function testNonOwnerCreatingBranchIsAutoGrantedAccessAndItIsAudited(): void
+    {
+        $a = $this->activeOwner();
+        $t = $a['tenantId'];
+        $main = $this->mainBranchId($t);
+        $uid = $this->makeUser($t, 'mgr@example.com', ['branches.view', 'branches.manage'], [$main]);
+        $mgr = $this->authUserFor($t, $uid);
+        $id = $this->branchService->create($mgr, ['code' => 'BARU', 'name' => 'Cabang Baru']);
+        $this->assertSame(1, $this->count('SELECT COUNT(*) AS n FROM user_branch_access WHERE tenant_id = ? AND user_id = ? AND branch_id = ?', [$t, $uid, $id]));
+        $this->assertTrue($this->policy->can($mgr, 'branches.manage', $id));
+        $this->assertSame([$main, $id], array_map(static fn (array $b): int => (int) $b['id'], $this->branchService->list($mgr)));
+        $audit = $this->db->fetchOne("SELECT * FROM audit_logs WHERE action = 'user.branches_assigned' AND entity_id = ?", [$uid]);
+        $this->assertTrue($audit !== null, 'pemberian akses otomatis harus tercatat');
+        $this->assertSame($t, (int) $audit['tenant_id']);
+        $this->assertSame($uid, (int) $audit['actor_id']);
+        $meta = json_decode((string) $audit['metadata'], true);
+        $this->assertSame([$id], $meta['added']);
+        $this->assertSame('branch_created', $meta['reason']);
+    }
+
+    public function testOwnerCreatingBranchGetsNoAccessRowAndAuditOfGrantIsAbsent(): void
+    {
+        $a = $this->activeOwner();
+        $owner = $this->authUserFor($a['tenantId'], $a['userId']);
+        $this->branchService->create($owner, ['code' => 'BARU', 'name' => 'Cabang Baru']);
+        $this->assertSame(0, $this->count('SELECT COUNT(*) AS n FROM user_branch_access WHERE tenant_id = ?', [$a['tenantId']]));
+        $this->assertSame(0, $this->count("SELECT COUNT(*) AS n FROM audit_logs WHERE action = 'user.branches_assigned'"));
+    }
+
+    public function testFailedBranchCreateDoesNotLeaveAccessRow(): void
+    {
+        $a = $this->activeOwner();
+        $t = $a['tenantId'];
+        $uid = $this->makeUser($t, 'mgr@example.com', ['branches.manage'], [$this->mainBranchId($t)]);
+        $mgr = $this->authUserFor($t, $uid);
+        $this->assertThrows(ValidationException::class, fn () => $this->branchService->create($mgr, ['code' => 'UTAMA', 'name' => 'dup']));
+        $this->assertSame(1, $this->count('SELECT COUNT(*) AS n FROM user_branch_access WHERE tenant_id = ? AND user_id = ?', [$t, $uid]));
     }
 
     public function testPermissionMiddlewareWithoutProviderFailsClosed(): void
