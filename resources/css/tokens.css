@@ -1,7 +1,7 @@
 /*
  * Token desain POS Retail. Sumber: DESAIN.md bagian 2 (warna), 3 (tipografi), 4 (spasi, radius).
- * Nilai tidak boleh diubah tanpa keputusan pemilik; pasangan yang gagal kontras dicatat di
- * docs/architecture/design-system.md dan scripts/contrast-known-failures.json.
+ * Nilai tidak boleh diubah tanpa keputusan pemilik. Deviasi dari DESAIN.md (text-muted terang,
+ * success terang, token border-strong) sudah disetujui pemilik; lihat docs/architecture/design-system.md.
  * Tema gelap didefinisikan dua kali (atribut eksplisit dan preferensi sistem) dan skrip
  * scripts/check-contrast.mjs memastikan keduanya identik.
  */
@@ -40,9 +40,10 @@
     --color-surface-muted: #F1F3F6;
     --color-text-primary: #182230;
     --color-text-secondary: #536174;
-    --color-text-muted: #68778A;
+    --color-text-muted: #627082;
     --color-border: #DCE2EA;
-    --color-success: #16804A;
+    --color-border-strong: #808B9B;
+    --color-success: #157A46;
     --color-success-subtle: #EAF7EF;
     --color-warning: #A85B08;
     --color-warning-subtle: #FFF4E5;
@@ -137,6 +138,7 @@
     --color-text-secondary: #C0CAD8;
     --color-text-muted: #A3B0C2;
     --color-border: #344052;
+    --color-border-strong: #68778A;
     --color-success: #65D695;
     --color-success-subtle: #1D3A2B;
     --color-warning: #FFC078;
@@ -168,6 +170,7 @@
         --color-text-secondary: #C0CAD8;
         --color-text-muted: #A3B0C2;
         --color-border: #344052;
+        --color-border-strong: #68778A;
         --color-success: #65D695;
         --color-success-subtle: #1D3A2B;
         --color-warning: #FFC078;

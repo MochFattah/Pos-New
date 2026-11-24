@@ -58,7 +58,7 @@ final class CssBuildTest extends TestCase
         $this->assertTrue($same, 'public/assets/css/app.css usang; jalankan node scripts/build-css.mjs dan komit hasilnya');
     }
 
-    public function testContrastCheckPassesWithAllowlist(): void
+    public function testContrastCheckPasses(): void
     {
         $node = trim((string) shell_exec('command -v node 2>/dev/null'));
         $this->assertTrue($node !== '', 'node diperlukan untuk skrip kontras');
@@ -73,16 +73,53 @@ final class CssBuildTest extends TestCase
         }
     }
 
+    public function testNoKnownContrastFailuresRemain(): void
+    {
+        $node = $this->node();
+        $this->assertTrue($node !== '', 'node diperlukan untuk skrip kontras');
+        exec(escapeshellarg($node) . ' ' . escapeshellarg($this->root . '/scripts/check-contrast.mjs') . ' --json 2>&1', $out, $code);
+        $data = json_decode(implode("\n", $out), true);
+        $this->assertSame(0, $code);
+        $this->assertSame([], array_values(array_filter($data['rows'], static fn (array $r): bool => $r['status'] !== 'PASS')), 'semua pasangan kontras harus lulus');
+        $known = json_decode((string) file_get_contents($this->root . '/scripts/contrast-known-failures.json'), true)['failures'];
+        $this->assertSame([], $known, 'allowlist kegagalan kontras harus kosong');
+        $ids = array_map(static fn (array $r): string => $r['theme'] . ' ' . $r['id'], $data['rows']);
+        foreach (['light', 'dark'] as $theme) {
+            foreach (['background', 'surface', 'surface-muted'] as $bg) {
+                $this->assertContains($theme . ' border-strong on ' . $bg, $ids);
+            }
+        }
+    }
+
+    public function testControlBordersUseBorderStrong(): void
+    {
+        $form = (string) file_get_contents($this->root . '/resources/css/components/form.css');
+        $button = (string) file_get_contents($this->root . '/resources/css/components/button.css');
+        $this->assertSame(1, preg_match('/\.field\s*\{[^}]*border:\s*1px solid var\(--color-border-strong\)/', $form));
+        $this->assertSame(1, preg_match('/\.btn-secondary\s*\{[^}]*border-color:\s*var\(--color-border-strong\)/', $button));
+        $this->assertTrue(str_contains($this->css(), '--color-border-strong:'));
+    }
+
     public function testContrastCheckFailsWhenKnownFailureWorsens(): void
     {
         $node = $this->node();
         $this->assertTrue($node !== '', 'node diperlukan untuk skrip kontras');
         $known = json_decode((string) file_get_contents($this->root . '/scripts/contrast-known-failures.json'), true);
-        $known['failures'][0]['ratioAtListing'] += 0.5; // rasio sekarang lebih rendah dari yang tercatat
+        // Salinan terisolasi dengan text-muted lama (4.11:1) dan entri allowlist yang mencatat 4.5.
+        $this->assertSame([], $known['failures']);
+        $tokens = (string) file_get_contents($this->root . '/resources/css/tokens.css');
+        $broken = preg_replace('/--color-text-muted:\s*#[0-9A-Fa-f]{6};/', '--color-text-muted: #68778A;', $tokens, 1);
+        $dir = sys_get_temp_dir() . '/contrast' . bin2hex(random_bytes(4));
+        mkdir($dir . '/resources/css', 0777, true);
+        mkdir($dir . '/scripts', 0777, true);
+        file_put_contents($dir . '/resources/css/tokens.css', $broken);
+        copy($this->root . '/scripts/check-contrast.mjs', $dir . '/scripts/check-contrast.mjs');
+        $known['failures'][] = ['theme' => 'light', 'id' => 'text-muted on surface-muted', 'reason' => 'x', 'ratioAtListing' => 4.5];
         $tmp = tempnam(sys_get_temp_dir(), 'known');
         file_put_contents($tmp, json_encode($known));
-        exec(escapeshellarg($node) . ' ' . escapeshellarg($this->root . '/scripts/check-contrast.mjs') . ' --known=' . escapeshellarg($tmp) . ' 2>&1', $out, $code);
+        exec(escapeshellarg($node) . ' ' . escapeshellarg($dir . '/scripts/check-contrast.mjs') . ' --known=' . escapeshellarg($tmp) . ' 2>&1', $out, $code);
         @unlink($tmp);
+        exec('rm -rf ' . escapeshellarg($dir));
         $this->assertSame(1, $code, 'kegagalan yang memburuk harus exit 1');
         $this->assertTrue(str_contains(implode("\n", $out), 'MEMBURUK'));
     }

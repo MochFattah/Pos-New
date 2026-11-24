@@ -71,7 +71,8 @@ for (const s of ['success', 'warning', 'danger', 'info']) {
     for (const b of bgs) add(`${s} on ${b}`, 'status', 4.5, s, b);
     for (const t of ['text-primary', 'text-secondary']) add(`${t} on ${s}-subtle`, 'status', 4.5, t, `${s}-subtle`);
 }
-for (const b of ['background', 'surface', 'surface-muted']) add(`border on ${b}`, 'non-teks', 3, 'border', b, 'WCAG 1.4.11 untuk border input');
+// border = pemisah dekoratif (kartu, tabel), tidak diuji; border-strong = batas kontrol (WCAG 1.4.11).
+for (const b of ['background', 'surface', 'surface-muted']) add(`border-strong on ${b}`, 'non-teks', 3, 'border-strong', b, 'WCAG 1.4.11 untuk border kontrol');
 for (const b of ['background', 'surface', 'surface-muted', 'primary-subtle']) add(`focus-ring on ${b}`, 'non-teks', 3, 'focus-ring', b);
 
 const knownArg = process.argv.find((a) => a.startsWith('--known='));

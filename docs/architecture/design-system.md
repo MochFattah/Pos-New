@@ -37,6 +37,8 @@ Keduanya memakai `scripts/dump-pages.php` (halaman dirender PHP lewat harness te
 
 ## Token
 
+Nilai terang `text-muted`, `success`, dan token `border-strong` menyimpang dari DESAIN.md atas keputusan pemilik (lihat bagian "Keputusan pemilik" di bawah).
+
 Tema gelap: `:root[data-theme="dark"]`, dan `@media (prefers-color-scheme: dark)` dengan `:root:not([data-theme="light"])`
 (isi identik; dijaga oleh `check-contrast.mjs`).
 
@@ -50,9 +52,10 @@ Tema gelap: `:root[data-theme="dark"]`, dan `@media (prefers-color-scheme: dark)
 | `--color-surface-muted` | `#F1F3F6` | `#222B38` |
 | `--color-text-primary` | `#182230` | `#F1F4F9` |
 | `--color-text-secondary` | `#536174` | `#C0CAD8` |
-| `--color-text-muted` | `#68778A` | `#A3B0C2` |
+| `--color-text-muted` | `#627082` | `#A3B0C2` |
 | `--color-border` | `#DCE2EA` | `#344052` |
-| `--color-success` | `#16804A` | `#65D695` |
+| `--color-border-strong` | `#808B9B` | `#68778A` |
+| `--color-success` | `#157A46` | `#65D695` |
 | `--color-success-subtle` | `#EAF7EF` | `#1D3A2B` |
 | `--color-warning` | `#A85B08` | `#FFC078` |
 | `--color-warning-subtle` | `#FFF4E5` | `#49351F` |
@@ -95,9 +98,9 @@ light  PASS    14.42  4.5  text-primary on surface-muted
 light  PASS     5.93  4.5  text-secondary on background
 light  PASS     6.31  4.5  text-secondary on surface
 light  PASS     5.67  4.5  text-secondary on surface-muted
-light  KNOWN    4.30  4.5  text-muted on background
-light  PASS     4.57  4.5  text-muted on surface
-light  KNOWN    4.11  4.5  text-muted on surface-muted
+light  PASS     4.75  4.5  text-muted on background
+light  PASS     5.05  4.5  text-muted on surface
+light  PASS     4.54  4.5  text-muted on surface-muted
 light  PASS     5.64  4.5  text-secondary on primary-subtle
 light  PASS    14.33  4.5  text-primary on primary-subtle
 light  PASS     5.85  4.5  on-primary on primary
@@ -108,10 +111,10 @@ light  PASS     5.51  4.5  primary (tautan/nav aktif) on background
 light  PASS     5.85  4.5  primary (tautan/nav aktif) on surface
 light  PASS     5.23  4.5  primary (tautan/nav aktif) on primary-subtle
 light  PASS     5.27  4.5  primary (tautan/nav aktif) on surface-muted
-light  PASS     4.51  4.5  success on success-subtle
-light  PASS     4.68  4.5  success on background
-light  PASS     4.98  4.5  success on surface
-light  KNOWN    4.48  4.5  success on surface-muted
+light  PASS     4.88  4.5  success on success-subtle
+light  PASS     5.06  4.5  success on background
+light  PASS     5.38  4.5  success on surface
+light  PASS     4.84  4.5  success on surface-muted
 light  PASS    14.54  4.5  text-primary on success-subtle
 light  PASS     5.72  4.5  text-secondary on success-subtle
 light  PASS     4.64  4.5  warning on warning-subtle
@@ -132,9 +135,9 @@ light  PASS     5.77  4.5  info on surface
 light  PASS     5.19  4.5  info on surface-muted
 light  PASS    14.38  4.5  text-primary on info-subtle
 light  PASS     5.66  4.5  text-secondary on info-subtle
-light  KNOWN    1.23    3  border on background
-light  KNOWN    1.30    3  border on surface
-light  KNOWN    1.17    3  border on surface-muted
+light  PASS     3.25    3  border-strong on background
+light  PASS     3.45    3  border-strong on surface
+light  PASS     3.10    3  border-strong on surface-muted
 light  PASS     5.51    3  focus-ring on background
 light  PASS     5.85    3  focus-ring on surface
 light  PASS     5.27    3  focus-ring on surface-muted
@@ -182,52 +185,45 @@ dark   PASS     8.86  4.5  info on surface
 dark   PASS     7.65  4.5  info on surface-muted
 dark   PASS    11.51  4.5  text-primary on info-subtle
 dark   PASS     7.66  4.5  text-secondary on info-subtle
-dark   KNOWN    1.76    3  border on background
-dark   KNOWN    1.57    3  border on surface
-dark   KNOWN    1.36    3  border on surface-muted
+dark   PASS     4.03    3  border-strong on background
+dark   PASS     3.62    3  border-strong on surface
+dark   PASS     3.12    3  border-strong on surface-muted
 dark   PASS     8.06    3  focus-ring on background
 dark   PASS     7.22    3  focus-ring on surface
 dark   PASS     6.24    3  focus-ring on surface-muted
 dark   PASS     5.28    3  focus-ring on primary-subtle
 
-!!! KEGAGALAN TERCATAT (menunggu keputusan pemilik proyek) !!!
-  [light] text-muted on background: 4.30 < 4.5 (tercatat 4.3)  -- Token text-muted (#68778A) di bawah 4.5:1; DESAIN.md 2.1 mewajibkan caption/metadata lolos kontras. Usulan: gelapkan text-muted (mis. #5E6C80).
-  [light] text-muted on surface-muted: 4.11 < 4.5 (tercatat 4.11)  -- Token text-muted (#68778A) di bawah 4.5:1; DESAIN.md 2.1 mewajibkan caption/metadata lolos kontras. Usulan: gelapkan text-muted (mis. #5E6C80).
-  [light] success on surface-muted: 4.48 < 4.5 (tercatat 4.48)  -- Token success terang (#16804A) 4.48:1 di atas surface-muted (#F1F3F6), tepat di bawah 4.5:1; terlihat bila teks/ikon status ditaruh di permukaan muted (mis. baris tabel selang-seling). Usulan: gelapkan success sedikit (mis. #157A46).
-  [light] border on background: 1.23 < 3 (tercatat 1.23)  -- Token border dipakai juga untuk border input/kontrol; WCAG 1.4.11 butuh 3:1. Usulan: token terpisah border-strong untuk kontrol (divider dekoratif boleh tetap).
-  [light] border on surface: 1.30 < 3 (tercatat 1.3)  -- Token border dipakai juga untuk border input/kontrol; WCAG 1.4.11 butuh 3:1. Usulan: token terpisah border-strong untuk kontrol (divider dekoratif boleh tetap).
-  [light] border on surface-muted: 1.17 < 3 (tercatat 1.17)  -- Token border dipakai juga untuk border input/kontrol; WCAG 1.4.11 butuh 3:1. Usulan: token terpisah border-strong untuk kontrol (divider dekoratif boleh tetap).
-  [dark] border on background: 1.76 < 3 (tercatat 1.76)  -- Token border dipakai juga untuk border input/kontrol; WCAG 1.4.11 butuh 3:1. Usulan: token terpisah border-strong untuk kontrol (divider dekoratif boleh tetap).
-  [dark] border on surface: 1.57 < 3 (tercatat 1.57)  -- Token border dipakai juga untuk border input/kontrol; WCAG 1.4.11 butuh 3:1. Usulan: token terpisah border-strong untuk kontrol (divider dekoratif boleh tetap).
-  [dark] border on surface-muted: 1.36 < 3 (tercatat 1.36)  -- Token border dipakai juga untuk border input/kontrol; WCAG 1.4.11 butuh 3:1. Usulan: token terpisah border-strong untuk kontrol (divider dekoratif boleh tetap).
-
-Total 100: 91 lulus, 9 gagal tercatat, 0 memburuk, 0 gagal BARU
+Total 100: 100 lulus, 0 gagal tercatat, 0 memburuk, 0 gagal BARU
 ```
 
-## Pasangan yang gagal (nilai langsung dari DESAIN.md, BELUM diubah, menunggu keputusan pemilik)
-
-Dicatat di `scripts/contrast-known-failures.json` (status "awaiting owner decision") dengan `ratioAtListing`.
-Skrip exit 1 bila ada kegagalan baru, atau bila rasio kegagalan tercatat sekarang LEBIH RENDAH dari `ratioAtListing`
-(memburuk); entri usang (pasangan sudah lulus) dicetak sebagai PERINGATAN dan tes `CssBuildTest` gagal sampai dihapus.
-
+Allowlist `scripts/contrast-known-failures.json` kosong (0 kegagalan tercatat); skrip exit 1 untuk setiap kegagalan baru.
+Mekanisme allowlist (status KNOWN/WORSENED, peringatan entri usang) dipertahankan untuk keputusan pemilik di masa depan.
+`border` (pemisah dekoratif: kartu, tabel, header, dialog) tidak diuji karena bukan batas kontrol.
 Cakupan pasangan: teks (primary/secondary/muted) x background|surface|surface-muted, teks primary/secondary x setiap
 `*-subtle` status, tombol, `primary` x background|surface|surface-muted|primary-subtle, setiap warna status x
-background|surface|surface-muted|`*-subtle`-nya sendiri, `border` dan `focus-ring` (non-teks 3:1), di kedua tema.
+background|surface|surface-muted|`*-subtle`-nya sendiri, `border-strong` x background|surface|surface-muted dan `focus-ring`
+(non-teks 3:1), di kedua tema.
 
-Daftar lengkap (9 kegagalan tercatat):
+## Keputusan pemilik: deviasi dari DESAIN.md
 
-1. light `text-muted` #68778A on background: 4.30 (butuh 4.5). Usulan: gelapkan, mis. #5E6C80.
-2. light `text-muted` on surface-muted: 4.11 (butuh 4.5). Usulan sama.
-3. light `success` #16804A on surface-muted: 4.48 (butuh 4.5; BARU di putaran 1). Usulan: mis. #157A46 (lulus di surface-muted dan success-subtle).
-4. light `border` #DCE2EA on background: 1.23 (butuh 3 untuk batas kontrol, WCAG 1.4.11).
-5. light `border` on surface: 1.30.
-6. light `border` on surface-muted: 1.17.
-7. dark `border` #344052 on background: 1.76.
-8. dark `border` on surface: 1.57.
-9. dark `border` on surface-muted: 1.36.
+Pemilik menyetujui perbaikan 9 pasangan yang gagal. `DESAIN.md` TIDAK diubah; nilai di bawah sengaja menyimpang darinya.
+Hanya token berikut yang berubah (nilai lain tetap persis DESAIN.md):
 
-Usulan untuk 4 sampai 9: token `border-strong` untuk kontrol input; `border` tetap untuk pemisah dekoratif.
-Hingga diputuskan, komponen memakai `border` apa adanya; `.field:hover` memakai `text-muted` dan `aria-invalid` memakai `danger` 2 px.
+| Token | Tema | Sebelum | Sesudah | Rasio sebelum | Rasio sesudah |
+|---|---|---|---|---|---|
+| `--color-text-muted` | terang | `#68778A` | `#627082` | 4.30 (background), 4.57 (surface), 4.11 (surface-muted) | 4.75, 5.05, 4.54 (min 4.5) |
+| `--color-success` | terang | `#16804A` | `#157A46` | 4.48 di surface-muted (4.51 di success-subtle) | 4.84 di surface-muted (4.88 di success-subtle); 5.06 background, 5.38 surface |
+| `--color-border-strong` | terang | (baru; sebelumnya kontrol memakai `border` `#DCE2EA`) | `#808B9B` | 1.23, 1.30, 1.17 | 3.25, 3.45, 3.10 (min 3) |
+| `--color-border-strong` | gelap | (baru; sebelumnya `border` `#344052`) | `#68778A` | 1.76, 1.57, 1.36 | 4.03, 3.62, 3.12 (min 3) |
+
+Urutan rasio: di atas background, surface, surface-muted. `text-muted` terang dipilih sebagai nilai paling terang pada
+rona yang sama yang lulus 4.5:1 di ketiga latar (usulan awal `#5E6C80` lebih gelap dari yang diperlukan).
+`success` terang memakai usulan `#157A46`; pasangan `success` lain (di success-subtle, background, surface) tetap lulus.
+Tema gelap tidak berubah selain token baru `border-strong`; blok gelap eksplisit dan `prefers-color-scheme` tetap identik.
+
+`--color-border-strong` dipakai untuk batas kontrol: `.field` (input, select, textarea) dan `.btn-secondary`.
+`--color-border` tetap untuk pemisah dan kartu (header, sidebar, tabel, dialog, toast, empty state). Checkbox dan radio
+memakai kontrol asli peramban tanpa border kustom, sehingga tidak ada aturan border yang perlu diganti.
 
 ## Catatan teknis dan batas yang diketahui
 
